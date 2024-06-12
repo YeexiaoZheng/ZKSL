@@ -18,7 +18,7 @@ pub enum NumericType {
 
 #[derive(Clone, Debug, Default)]
 pub struct NumericConfig {
-    pub used_gadgets: Arc<BTreeSet<NumericType>>,
+    pub used_numerics: Arc<BTreeSet<NumericType>>,
     pub columns: Vec<Column<Advice>>,
     pub fixed_columns: Vec<Column<Fixed>>,
     pub selectors: HashMap<NumericType, Vec<Selector>>,

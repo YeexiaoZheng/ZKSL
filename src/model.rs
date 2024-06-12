@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, marker::PhantomData};
+use std::{collections::BTreeSet, marker::PhantomData, sync::Mutex};
 
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -8,13 +8,16 @@ use halo2_proofs::{
 use ndarray::{Array, Dim, IxDyn};
 
 use crate::{
-    layers::{
-        fully_connected::{FullyConnectedChip, FullyConnectedConfig},
-        layer::{AssignedTensor, LayerConfig, LayerType, NumericConsumer},
-        none::NoneChip,
-    },
-    numerics::numeric::{NumericConfig, NumericType},
+    layers::layer::{AssignedTensor, LayerConfig, LayerType},
+    numerics::{dot::DotChip, numeric::{NumericConfig, NumericType}},
+    utils::matcher::{match_layer_name_to_layer_type, match_layer_type_to_consumer},
 };
+
+use lazy_static::lazy_static;
+lazy_static! {
+    pub static ref NUMERIC_CONFIG: Mutex<NumericConfig> = Mutex::new(NumericConfig::default());
+    // pub static ref PUBLIC_VALS: Mutex<Vec<BigUint>> = Mutex::new(vec![]);
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct FormatLayer<F: PrimeField> {
@@ -49,10 +52,7 @@ impl<F: PrimeField> ModelCircuit<F> {
         let mut used_numerics = BTreeSet::new();
         for layer in layers.iter() {
             let layer_params = vec![];
-            let layer_type = match layer.layername.as_str() {
-                "FullyConnected" => LayerType::FullyConnected,
-                _ => LayerType::None,
-            };
+            let layer_type = match_layer_name_to_layer_type(layer.layername.clone());
             layer_configs.push(LayerConfig {
                 layer_type,
                 layer_params: layer_params.clone(),
@@ -61,17 +61,11 @@ impl<F: PrimeField> ModelCircuit<F> {
                 mask: vec![],
             });
             layer_chips.push(layer_type);
-            for numeric in match layer_type {
-                LayerType::FullyConnected => Box::new(FullyConnectedChip {
-                    config: FullyConnectedConfig { normalize: true },
-                    _marker: PhantomData::<F>,
-                }) as Box<dyn NumericConsumer>,
-                _ => Box::new(NoneChip {}) as Box<dyn NumericConsumer>,
-            }
-            .used_numerics(layer_params)
-            {
-                used_numerics.insert(numeric);
-            }
+            used_numerics.extend(
+                match_layer_type_to_consumer::<F>(layer_type)
+                    .used_numerics(layer_params)
+                    .iter(),
+            )
         }
         Self {
             k,
@@ -128,7 +122,14 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        // for
+        let mut numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
+        let binding = numeric_config.used_numerics.clone();
+        let iter = binding.iter();
+        for numeric in iter {
+            numeric_config = match numeric {
+                NumericType::Dot => DotChip::<F>::configure(meta, numeric_config.clone()),
+            };
+        }
         todo!()
     }
 
