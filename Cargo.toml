@@ -1,0 +1,13 @@
+[package]
+name = "zkml"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+halo2 = { git="https://github.com/privacy-scaling-explorations/halo2", package="halo2" }
+halo2_proofs = { git="https://github.com/privacy-scaling-explorations/halo2", package="halo2_proofs" }
+lazy_static = "1.4.0"
+ndarray = "0.15.6"
+num-bigint = "0.4.3"
