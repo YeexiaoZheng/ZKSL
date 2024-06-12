@@ -19,14 +19,15 @@ impl<F: PrimeField> DotChip<F> {
         }
     }
 
-    pub fn configure(meta: &mut ConstraintSystem<F>, mumeric_config: NumericConfig) -> NumericConfig {
-        NumericConfig {
-            ..mumeric_config
-        }
+    pub fn configure(
+        meta: &mut ConstraintSystem<F>,
+        mumeric_config: NumericConfig,
+    ) -> NumericConfig {
+        NumericConfig { ..mumeric_config }
     }
 }
 
-impl<F: PrimeField> Numeric<F> for DotChip<F>{
+impl<F: PrimeField> Numeric<F> for DotChip<F> {
     fn typename(&self) -> String {
         "Dot".to_string()
     }
