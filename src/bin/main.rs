@@ -16,7 +16,8 @@ fn main() {
 
     // original matrix
     let o_input = Array::<i64, Dim<_>>::from_shape_vec((1, 2), v_input.clone()).unwrap();
-    let o_hidden_layer = Array::<i64, Dim<_>>::from_shape_vec((2, 2), v_hidden_layer.clone()).unwrap();
+    let o_hidden_layer =
+        Array::<i64, Dim<_>>::from_shape_vec((2, 2), v_hidden_layer.clone()).unwrap();
     let o_output = o_input.dot(&o_hidden_layer);
     println!("{:?}", o_input);
     println!("{:?}", o_hidden_layer);
