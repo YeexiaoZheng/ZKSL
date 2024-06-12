@@ -10,45 +10,50 @@ fn to_field(x: i64) -> Fr {
 }
 
 fn main() {
+    // original vector
+    let v_input: Vec<i64> = vec![1, 2];
+    let v_hidden_layer: Vec<i64> = vec![1, 2, 3, 4];
+
     // original matrix
-    let o_input = Array::<i64, Dim<_>>::from_shape_vec((1, 2), vec![1, 2]).unwrap();
-    let o_hidden_layer = Array::<i64, Dim<_>>::from_shape_vec((2, 2), vec![1, 2, 3, 4]).unwrap();
+    let o_input = Array::<i64, Dim<_>>::from_shape_vec((1, 2), v_input.clone()).unwrap();
+    let o_hidden_layer = Array::<i64, Dim<_>>::from_shape_vec((2, 2), v_hidden_layer.clone()).unwrap();
     let o_output = o_input.dot(&o_hidden_layer);
     println!("{:?}", o_input);
     println!("{:?}", o_hidden_layer);
     println!("{:?}", o_output);
 
     // field matrix
-    // Array::
-    o_input.
-    let input = Array::from_shape_vec(IxDyn(o_input.shape()), );
-    let input = Array::from_shape_vec(
-        IxDyn(&vec![1, 2]),
-        vec![1, 2].iter().map(|x| to_field(*x)).collect::<Vec<_>>(),
+    let f_input = Array::from_shape_vec(
+        IxDyn(o_input.shape()),
+        v_input.iter().map(|x| to_field(*x)).collect::<Vec<_>>(),
     )
     .unwrap();
-    let hidden_layer = Array::from_shape_vec(
-        IxDyn(&vec![2, 2]),
-        vec![1, 2, 3, 4]
+    let f_hidden_layer = Array::from_shape_vec(
+        IxDyn(o_hidden_layer.shape()),
+        v_hidden_layer
             .iter()
             .map(|x| to_field(*x))
             .collect::<Vec<_>>(),
     )
     .unwrap();
-    let output = vec![7, 10].iter().map(|x| to_field(*x)).collect::<Vec<_>>();
+    let f_output = Array::from_shape_vec(
+        IxDyn(o_output.shape()),
+        o_output.iter().map(|x| to_field(*x)).collect::<Vec<_>>(),
+    )
+    .unwrap();
 
-    let hidden_layer = hidden_layer.into_dyn();
+    let output = f_output.clone().into_iter().collect::<Vec<_>>();
+
     let k = 3;
-
     let circuit = ModelCircuit::<Fr>::construct(
         k,
         vec![FormatLayer {
-            name: "FullyConnected".to_string(),
+            layername: "FullyConnected".to_string(),
             input_shape: vec![1, 2],
             output_shape: vec![1, 2],
             weight_shape: vec![2, 2],
             original_weights: o_hidden_layer,
-            field_weights: hidden_layer,
+            field_weights: f_hidden_layer,
         }],
     );
 

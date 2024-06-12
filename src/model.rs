@@ -9,7 +9,7 @@ use ndarray::{Array, Dim, IxDyn};
 
 #[derive(Clone, Debug, Default)]
 pub struct FormatLayer<F: PrimeField> {
-    pub name: String,
+    pub layername: String,
     pub input_shape: Vec<usize>,
     pub output_shape: Vec<usize>,
     pub weight_shape: Vec<usize>,
