@@ -28,7 +28,7 @@ impl<F: PrimeField> DotChip<F> {
 }
 
 impl<F: PrimeField> Numeric<F> for DotChip<F> {
-    fn typename(&self) -> String {
+    fn name(&self) -> String {
         "Dot".to_string()
     }
 }

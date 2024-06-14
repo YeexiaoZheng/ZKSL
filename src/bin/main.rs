@@ -15,9 +15,9 @@ fn main() {
     let v_hidden_layer: Vec<i64> = vec![1, 2, 3, 4];
 
     // original matrix
-    let o_input = Array::<i64, Dim<_>>::from_shape_vec((1, 2), v_input.clone()).unwrap();
+    let o_input = Array::<i64, Dim<_>>::from_shape_vec([1, 2], v_input.clone()).unwrap();
     let o_hidden_layer =
-        Array::<i64, Dim<_>>::from_shape_vec((2, 2), v_hidden_layer.clone()).unwrap();
+        Array::<i64, Dim<_>>::from_shape_vec([2, 2], v_hidden_layer.clone()).unwrap();
     let o_output = o_input.dot(&o_hidden_layer);
     println!("{:?}", o_input);
     println!("{:?}", o_hidden_layer);
@@ -43,13 +43,14 @@ fn main() {
     )
     .unwrap();
 
+    let input = f_input.clone().into_iter().collect::<Vec<_>>();
     let output = f_output.clone().into_iter().collect::<Vec<_>>();
 
     let k = 3;
     let circuit = ModelCircuit::<Fr>::construct(
         k,
         vec![FormatLayer {
-            layername: "FullyConnected".to_string(),
+            layer_name: "FullyConnected".to_string(),
             input_shape: vec![1, 2],
             output_shape: vec![1, 2],
             weight_shape: vec![2, 2],
@@ -58,5 +59,5 @@ fn main() {
         }],
     );
 
-    MockProver::run(3, &circuit, vec![output]).unwrap();
+    MockProver::run(3, &circuit, vec![input, output]).unwrap();
 }

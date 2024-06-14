@@ -36,7 +36,7 @@ pub struct NumericConfig {
 }
 
 pub trait Numeric<F: PrimeField> {
-    fn typename(&self) -> String;
+    fn name(&self) -> String;
 
     fn forward(&self) -> Result<(), Error> {
         Ok(())

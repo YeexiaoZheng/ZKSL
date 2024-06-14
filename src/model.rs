@@ -8,7 +8,7 @@ use halo2_proofs::{
 use ndarray::{Array, Dim, IxDyn};
 
 use crate::{
-    layers::layer::{AssignedTensor, LayerConfig, LayerType},
+    layers::layer::{AssignedTensor, Layer, LayerConfig, LayerType},
     numerics::{dot::DotChip, numeric::{NumericConfig, NumericType}},
     utils::matcher::{match_layer_name_to_layer_type, match_layer_type_to_consumer},
 };
@@ -21,7 +21,7 @@ lazy_static! {
 
 #[derive(Clone, Debug, Default)]
 pub struct FormatLayer<F: PrimeField> {
-    pub layername: String,
+    pub layer_name: String,
     pub input_shape: Vec<usize>,
     pub output_shape: Vec<usize>,
     pub weight_shape: Vec<usize>,
@@ -34,7 +34,7 @@ pub struct ModelCircuit<F: PrimeField> {
     pub k: usize,
     pub layers: Vec<FormatLayer<F>>,
     pub layer_chips: Vec<LayerType>,
-    pub layer_configs: Vec<LayerConfig>,
+    pub layer_configs: Vec<LayerConfig<F>>,
     pub used_numerics: BTreeSet<NumericType>,
 }
 
@@ -51,19 +51,13 @@ impl<F: PrimeField> ModelCircuit<F> {
         let mut layer_chips = vec![];
         let mut used_numerics = BTreeSet::new();
         for layer in layers.iter() {
-            let layer_params = vec![];
-            let layer_type = match_layer_name_to_layer_type(layer.layername.clone());
-            layer_configs.push(LayerConfig {
-                layer_type,
-                layer_params: layer_params.clone(),
-                input_shape: layer.input_shape.clone(),
-                output_shape: layer.output_shape.clone(),
-                mask: vec![],
-            });
+            let layer_type = match_layer_name_to_layer_type(layer.layer_name.clone());
+            let layer_config = LayerConfig::<F>::construct(layer.clone());
+            layer_configs.push(layer_config.clone());
             layer_chips.push(layer_type);
             used_numerics.extend(
-                match_layer_type_to_consumer::<F>(layer_type)
-                    .used_numerics(layer_params)
+                match_layer_type_to_consumer::<F>(layer_type, layer_config)
+                    .used_numerics()
                     .iter(),
             )
         }
@@ -111,6 +105,9 @@ impl<F: PrimeField> ModelCircuit<F> {
             },
         )?)
     }
+
+    pub fn _forward(&self) {}
+    pub fn forward(&self) {}
 }
 
 impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
@@ -122,15 +119,34 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        // private column
+        let column = meta.advice_column();
+        meta.enable_equality(column);
+
+        // public column
+        let public = meta.instance_column();
+        meta.enable_equality(public);
+
+        // fixed column
+        let fixed = meta.fixed_column();
+        meta.enable_equality(fixed);
+
+        // numeric config
         let mut numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
         let binding = numeric_config.used_numerics.clone();
         let iter = binding.iter();
         for numeric in iter {
             numeric_config = match numeric {
-                NumericType::Dot => DotChip::<F>::configure(meta, numeric_config.clone()),
+                NumericType::Dot => DotChip::<F>::configure(meta, numeric_config),
             };
         }
-        todo!()
+
+        // return
+        ModelConfig {
+            numeric_config,
+            public,
+            _marker: PhantomData,
+        }
     }
 
     fn synthesize(
