@@ -38,6 +38,8 @@ pub struct NumericConfig {
 pub trait Numeric<F: PrimeField> {
     fn name(&self) -> String;
 
+    fn num_cols_per_op(&self) -> usize;
+
     fn forward(&self) -> Result<(), Error> {
         Ok(())
     }

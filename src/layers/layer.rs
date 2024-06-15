@@ -22,11 +22,13 @@ pub type AssignedTensor<F> = Array<CellRc<F>, IxDyn>;
 pub struct LayerConfig<F: PrimeField> {
     pub layer_type: LayerType,
     pub input_shape: Vec<usize>,
+    // pub input_configs: Vec<&'a LayerConfig<'a, F>>,
     pub output_shape: Vec<usize>,
+    // pub output_configs: Vec<&'a LayerConfig<'a, F>>,
     pub weight_shape: Vec<usize>,
     pub o_weight: Tensor,
     pub f_weight: Array<F, IxDyn>,
-    pub layer_params: Vec<i64>, // This is turned into layer specific configurations at runtime
+    pub params: Vec<i64>, // This is turned into layer specific configurations at runtime
     pub mask: Vec<i64>,
 }
 
@@ -39,10 +41,15 @@ impl<F: PrimeField> LayerConfig<F> {
             weight_shape: layer.weight_shape,
             o_weight: layer.original_weights.into_dyn(),
             f_weight: layer.field_weights,
-            layer_params: vec![],
+            params: vec![],
             mask: vec![],
         }
     }
+}
+
+pub trait ConfigLayer<F: PrimeField> {
+    fn config(&self) -> &LayerConfig<F>;
+    fn forward(&self, input: Tensor) -> Result<Tensor, ShapeError>;
 }
 
 pub trait Layer<F: PrimeField> {

@@ -3,7 +3,28 @@ use ndarray::ShapeError;
 
 use crate::numerics::numeric::NumericType;
 
-use super::layer::{Layer, NumericConsumer, Tensor};
+use super::layer::{ConfigLayer, Layer, LayerConfig, NumericConsumer, Tensor};
+
+#[derive(Clone, Debug, Default)]
+pub struct NoneLayer<F: PrimeField> {
+    pub config: LayerConfig<F>,
+}
+
+impl<F: PrimeField> NoneLayer<F> {
+    pub fn construct(config: LayerConfig<F>) -> Self {
+        Self { config }
+    }
+}
+
+impl<F: PrimeField> ConfigLayer<F> for NoneLayer<F> {
+    fn config(&self) -> &LayerConfig<F> {
+        &self.config
+    }
+
+    fn forward(&self, input: Tensor) -> Result<Tensor, ShapeError> {
+        Ok(input)
+    }
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct NoneChip {}

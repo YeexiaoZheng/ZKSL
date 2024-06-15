@@ -8,7 +8,7 @@ use halo2_proofs::{
 use ndarray::{Array, Dim, IxDyn};
 
 use crate::{
-    layers::layer::{AssignedTensor, Layer, LayerConfig, LayerType},
+    layers::layer::{AssignedTensor, ConfigLayer, Layer, LayerConfig, LayerType},
     numerics::{dot::DotChip, numeric::{NumericConfig, NumericType}},
     utils::matcher::{match_layer_name_to_layer_type, match_layer_type_to_consumer},
 };
@@ -33,6 +33,8 @@ pub struct FormatLayer<F: PrimeField> {
 pub struct ModelCircuit<F: PrimeField> {
     pub k: usize,
     pub layers: Vec<FormatLayer<F>>,
+    // pub lay: Vec<impl ConfigLayer>,
+    // pub graph: Graph,
     pub layer_chips: Vec<LayerType>,
     pub layer_configs: Vec<LayerConfig<F>>,
     pub used_numerics: BTreeSet<NumericType>,
