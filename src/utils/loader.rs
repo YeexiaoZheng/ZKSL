@@ -59,5 +59,11 @@ pub fn load_from_json(_file_path: &str) -> GraphJson {
         "output_shape": [1, 2]
     }
     "#;
-    serde_json::from_str(tmp_json).unwrap()
+    match serde_json::from_str(tmp_json) {
+        Ok(graph_json) => graph_json,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            panic!("Failed to load graph from json! ")
+        }
+    }
 }

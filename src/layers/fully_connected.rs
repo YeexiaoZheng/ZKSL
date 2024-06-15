@@ -1,9 +1,13 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, mem};
 
-use halo2_proofs::halo2curves::ff::PrimeField;
+use halo2_proofs::{
+    circuit::{Layouter, SimpleFloorPlanner},
+    halo2curves::ff::PrimeField,
+    plonk::{Circuit, ConstraintSystem, ErrorFront},
+};
 use ndarray::ShapeError;
 
-use crate::numerics::numeric::NumericType;
+use crate::numerics::numeric::{NumericConfig, NumericType, _NumericConfig};
 
 use super::layer::{ConfigLayer, Layer, LayerConfig, NumericConsumer, Tensor};
 
@@ -59,5 +63,64 @@ impl<F: PrimeField> NumericConsumer for FullyConnectedChip<F> {
         let mut numerics = vec![];
         numerics.push(NumericType::Dot);
         numerics
+    }
+}
+
+pub struct FullyConnectedCircuit<F: PrimeField> {
+    input: Vec<F>,
+    output: Vec<F>,
+    weight: Vec<F>,
+}
+
+impl<F: PrimeField> FullyConnectedCircuit<F> {
+    pub fn construct(config: LayerConfig<F>) -> Self {
+        Self {
+            input: vec![],
+            output: vec![],
+            weight: vec![],
+        }
+    }
+}
+
+impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
+    type Config = _NumericConfig;
+    type FloorPlanner = SimpleFloorPlanner;
+
+    fn without_witnesses(&self) -> Self {
+        todo!()
+    }
+
+    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        let k = 3;
+        let columns = vec![meta.advice_column()];
+        for col in columns.iter() {
+            meta.enable_equality(*col);
+        }
+        let fixed = vec![meta.fixed_column()];
+        for fix in fixed.iter() {
+            meta.enable_equality(*fix);
+        }
+        let public = meta.instance_column();
+        meta.enable_equality(public);
+
+        Self::Config {
+            k,
+            scale_factor: 1,
+            num_rows: (1 << k),
+            num_cols: 10,
+            columns,
+            fixed,
+            public,
+            use_selectors: true,
+            selectors: todo!(),
+        }
+    }
+
+    fn synthesize(
+        &self,
+        config: Self::Config,
+        mut layouter: impl Layouter<F>,
+    ) -> Result<(), ErrorFront> {
+        todo!()
     }
 }

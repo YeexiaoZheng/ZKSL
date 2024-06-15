@@ -8,9 +8,7 @@ use halo2_proofs::{
 use ndarray::{Array, Dim, IxDyn};
 
 use crate::{
-    layers::layer::{AssignedTensor, ConfigLayer, Layer, LayerConfig, LayerType},
-    numerics::{dot::DotChip, numeric::{NumericConfig, NumericType}},
-    utils::matcher::{match_layer_name_to_layer_type, match_layer_type_to_consumer},
+    graph::Graph, layers::{self, layer::{AssignedTensor, ConfigLayer, Layer, LayerConfig, LayerType}}, numerics::{dot::DotChip, numeric::{NumericConfig, NumericType}}, utils::matcher::{match_layer_name_to_layer_type, match_layer_type_to_consumer}
 };
 
 use lazy_static::lazy_static;
@@ -32,9 +30,7 @@ pub struct FormatLayer<F: PrimeField> {
 #[derive(Clone, Debug, Default)]
 pub struct ModelCircuit<F: PrimeField> {
     pub k: usize,
-    pub layers: Vec<FormatLayer<F>>,
-    // pub lay: Vec<impl ConfigLayer>,
-    // pub graph: Graph,
+    pub graph: Graph,
     pub layer_chips: Vec<LayerType>,
     pub layer_configs: Vec<LayerConfig<F>>,
     pub used_numerics: BTreeSet<NumericType>,
@@ -48,24 +44,25 @@ pub struct ModelConfig<F: PrimeField> {
 }
 
 impl<F: PrimeField> ModelCircuit<F> {
-    pub fn construct(k: usize, layers: Vec<FormatLayer<F>>) -> Self {
+    pub fn construct(k: usize, graph: Graph) -> Self {
+        let layers = &graph.nodes;
         let mut layer_configs = vec![];
         let mut layer_chips = vec![];
         let mut used_numerics = BTreeSet::new();
         for layer in layers.iter() {
-            let layer_type = match_layer_name_to_layer_type(layer.layer_name.clone());
-            let layer_config = LayerConfig::<F>::construct(layer.clone());
-            layer_configs.push(layer_config.clone());
-            layer_chips.push(layer_type);
-            used_numerics.extend(
-                match_layer_type_to_consumer::<F>(layer_type, layer_config)
-                    .used_numerics()
-                    .iter(),
-            )
+            let layer_type = match_layer_name_to_layer_type(layer.op_type.clone());
+            // let layer_config = LayerConfig::<F>::construct(layer.clone());
+            // layer_configs.push(layer_config.clone());
+            // layer_chips.push(layer_type);
+            // used_numerics.extend(
+            //     match_layer_type_to_consumer::<F>(layer_type, layer_config)
+            //         .used_numerics()
+            //         .iter(),
+            // )
         }
         Self {
             k,
-            layers,
+            graph,
             layer_chips,
             layer_configs,
             used_numerics,
@@ -108,8 +105,11 @@ impl<F: PrimeField> ModelCircuit<F> {
         )?)
     }
 
-    pub fn _forward(&self) {}
-    pub fn forward(&self) {}
+    pub fn forward(&self) {
+        for layer in self.graph.nodes.iter() {
+            todo!("forward")
+        }
+    }
 }
 
 impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
@@ -157,16 +157,16 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), ErrorFront> {
         // assign tensors
-        self.assign_tensors(
-            layouter.namespace(|| "assign_tensors"),
-            &config.numeric_config.columns,
-            &self
-                .layers
-                .iter()
-                .map(|layer| layer.field_weights.clone())
-                .collect::<Vec<_>>(),
-        )
-        .unwrap();
+        // self.assign_tensors(
+        //     layouter.namespace(|| "assign_tensors"),
+        //     &config.numeric_config.columns,
+        //     &self
+        //         .layers
+        //         .iter()
+        //         .map(|layer| layer.field_weights.clone())
+        //         .collect::<Vec<_>>(),
+        // )
+        // .unwrap();
         Ok(())
     }
 }

@@ -5,6 +5,7 @@ use ndarray::IxDyn;
 use crate::layers::layer::Tensor;
 use crate::utils::loader::{GraphJson, NodeJson};
 
+#[derive(Clone, Debug, Default)]
 pub struct Node {
     pub op_type: String,
     pub inputs: Vec<String>,
@@ -23,6 +24,7 @@ impl Node {
     }
 }
 
+#[derive(Clone, Debug, Default)]
 pub struct Graph {
     pub tensor_map: HashMap<String, Tensor>,
     pub nodes: Vec<Node>,
@@ -54,7 +56,7 @@ impl Graph {
     }
 
     pub fn run(&self) -> Tensor {
-        for node in self.nodes.iter() {
+        for _node in self.nodes.iter() {
             todo!();
         }
         Tensor::from_shape_vec(IxDyn(&[1, 2]), vec![1, 2]).unwrap()
