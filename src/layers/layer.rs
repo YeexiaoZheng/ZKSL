@@ -15,6 +15,7 @@ pub enum LayerType {
 }
 
 pub type Tensor = Array<i64, IxDyn>;
+pub type FieldTensor<F> = Array<F, IxDyn>;
 pub type CellRc<F> = AssignedCell<F, F>;
 pub type AssignedTensor<F> = Array<CellRc<F>, IxDyn>;
 

@@ -8,7 +8,16 @@ use halo2_proofs::{
 use ndarray::{Array, Dim, IxDyn};
 
 use crate::{
-    graph::Graph, layers::{self, layer::{AssignedTensor, ConfigLayer, Layer, LayerConfig, LayerType}}, numerics::{dot::DotChip, numeric::{NumericConfig, NumericType}}, utils::matcher::{match_layer_name_to_layer_type, match_layer_type_to_consumer}
+    graph::Graph,
+    layers::{
+        self,
+        layer::{AssignedTensor, ConfigLayer, FieldTensor, Layer, LayerConfig, LayerType},
+    },
+    numerics::{
+        dot::DotChip,
+        numeric::{NumericConfig, NumericType},
+    },
+    utils::matcher::{match_layer_name_to_layer_type, match_layer_type_to_consumer},
 };
 
 use lazy_static::lazy_static;
@@ -73,7 +82,7 @@ impl<F: PrimeField> ModelCircuit<F> {
         &self,
         mut layouter: impl Layouter<F>,
         columns: &Vec<Column<Advice>>,
-        tensors: &Vec<Array<F, IxDyn>>,
+        tensors: &Vec<FieldTensor<F>>,
     ) -> Result<Vec<AssignedTensor<F>>, Error> {
         Ok(layouter.assign_region(
             || "assign_tensors",
@@ -87,14 +96,13 @@ impl<F: PrimeField> ModelCircuit<F> {
                             .map(|cell| {
                                 let row_idx = cell_idx / columns.len();
                                 let col_idx = cell_idx % columns.len();
-                                let cell = region.assign_advice(
+                                cell_idx += 1;
+                                Ok(region.assign_advice(
                                     || "assign tensor cell",
                                     columns[col_idx],
                                     row_idx,
                                     || Value::known(*cell),
-                                )?;
-                                cell_idx += 1;
-                                Ok(cell)
+                                )?)
                             })
                             .collect::<Result<Vec<_>, ErrorFront>>()?;
                         Ok(Array::from_shape_vec(IxDyn(tensor.shape()), assigned_tensor).unwrap())
@@ -138,9 +146,9 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
         let binding = numeric_config.used_numerics.clone();
         let iter = binding.iter();
         for numeric in iter {
-            numeric_config = match numeric {
-                NumericType::Dot => DotChip::<F>::configure(meta, numeric_config),
-            };
+            // numeric_config = match numeric {
+            //     NumericType::Dot => DotChip::<F>::configure(meta, numeric_config),
+            // };
         }
 
         // return

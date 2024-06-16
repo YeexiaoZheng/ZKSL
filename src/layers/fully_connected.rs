@@ -1,15 +1,24 @@
-use std::{marker::PhantomData, mem};
+use std::{
+    collections::{BTreeSet, HashMap},
+    marker::PhantomData,
+    sync::Arc,
+};
 
 use halo2_proofs::{
-    circuit::{Layouter, SimpleFloorPlanner},
+    circuit::{Layouter, SimpleFloorPlanner, Value},
     halo2curves::ff::PrimeField,
-    plonk::{Circuit, ConstraintSystem, ErrorFront},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, ErrorFront},
 };
-use ndarray::ShapeError;
+use ndarray::{Array, IxDyn, ShapeError};
 
-use crate::numerics::numeric::{NumericConfig, NumericType, _NumericConfig};
+use crate::numerics::{
+    dot::DotChip,
+    numeric::{Numeric, NumericType, _NumericConfig},
+};
 
-use super::layer::{ConfigLayer, Layer, LayerConfig, NumericConsumer, Tensor};
+use super::layer::{
+    AssignedTensor, ConfigLayer, FieldTensor, Layer, LayerConfig, NumericConsumer, Tensor,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct FullyConnectedLayer<F: PrimeField> {
@@ -67,18 +76,55 @@ impl<F: PrimeField> NumericConsumer for FullyConnectedChip<F> {
 }
 
 pub struct FullyConnectedCircuit<F: PrimeField> {
-    input: Vec<F>,
-    output: Vec<F>,
-    weight: Vec<F>,
+    pub config: LayerConfig<F>,
+    pub input: Vec<FieldTensor<F>>,
+    pub output: Vec<F>,
+    pub weight: Vec<F>,
 }
 
 impl<F: PrimeField> FullyConnectedCircuit<F> {
     pub fn construct(config: LayerConfig<F>) -> Self {
         Self {
+            config,
             input: vec![],
             output: vec![],
             weight: vec![],
         }
+    }
+
+    pub fn assign_inputs(
+        &self,
+        mut layouter: impl Layouter<F>,
+        columns: &Vec<Column<Advice>>,
+        tensors: &Vec<FieldTensor<F>>,
+    ) -> Result<Vec<AssignedTensor<F>>, Error> {
+        Ok(layouter.assign_region(
+            || "assign_tensors",
+            |mut region| {
+                let mut cell_idx = 0;
+                let assigned_tensors = tensors
+                    .iter()
+                    .map(|tensor| {
+                        let assigned_tensor = tensor
+                            .iter()
+                            .map(|cell| {
+                                let row_idx = cell_idx / columns.len();
+                                let col_idx = cell_idx % columns.len();
+                                cell_idx += 1;
+                                Ok(region.assign_advice(
+                                    || "assign tensor cell",
+                                    columns[col_idx],
+                                    row_idx,
+                                    || Value::known(*cell),
+                                )?)
+                            })
+                            .collect::<Result<Vec<_>, ErrorFront>>()?;
+                        Ok(Array::from_shape_vec(IxDyn(tensor.shape()), assigned_tensor).unwrap())
+                    })
+                    .collect::<Result<Vec<_>, ErrorFront>>()?;
+                Ok(assigned_tensors)
+            },
+        )?)
     }
 }
 
@@ -103,7 +149,8 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
         let public = meta.instance_column();
         meta.enable_equality(public);
 
-        Self::Config {
+        DotChip::<F>::configure(meta, _NumericConfig {
+            used_numerics: Arc::new(BTreeSet::new()),
             k,
             scale_factor: 1,
             num_rows: (1 << k),
@@ -112,8 +159,8 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
             fixed,
             public,
             use_selectors: true,
-            selectors: todo!(),
-        }
+            selectors: HashMap::new(),
+        })
     }
 
     fn synthesize(
@@ -121,6 +168,17 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), ErrorFront> {
-        todo!()
+        let dot_chip = DotChip::<F>::construct(config.clone());
+        let inputs = self
+            .assign_inputs(
+                layouter.namespace(|| "assign_inputs"),
+                &config.columns,
+                &self.input,
+            )
+            .unwrap();
+
+        let outputs = dot_chip.forward(inputs).unwrap();
+
+        dot_chip.expose_forward(layouter.namespace(|| "expose_forward"), &outputs, 0)
     }
 }

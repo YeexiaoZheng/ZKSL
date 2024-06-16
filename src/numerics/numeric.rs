@@ -6,9 +6,11 @@ use std::{
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region},
     halo2curves::group::ff::PrimeField,
-    plonk::{Advice, Column, Error, Fixed, Instance, Selector, TableColumn},
+    plonk::{Advice, Column, Error, ErrorFront, Fixed, Instance, Selector, TableColumn},
 };
 use num_bigint::{BigUint, ToBigUint};
+
+use crate::layers::layer::{AssignedTensor, FieldTensor};
 //   use num_traits::cast::ToPrimitive;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -37,7 +39,9 @@ pub struct NumericConfig {
 
 #[derive(Clone, Debug)]
 pub struct _NumericConfig {
-    // 
+    pub used_numerics: Arc<BTreeSet<NumericType>>,
+
+    //
     pub k: usize,
     pub scale_factor: u64,
     pub num_rows: usize,
@@ -51,7 +55,6 @@ pub struct _NumericConfig {
     // selectors
     pub use_selectors: bool,
     pub selectors: HashMap<NumericType, Vec<Selector>>,
-    
     // lookup tables
     // pub tables: HashMap<NumericType, Vec<TableColumn>>,
     // pub maps: HashMap<NumericType, Vec<HashMap<i64, i64>>>,
@@ -62,7 +65,14 @@ pub trait Numeric<F: PrimeField> {
 
     fn num_cols_per_op(&self) -> usize;
 
-    fn forward(&self) -> Result<(), Error> {
-        Ok(())
+    fn forward(&self, inputs: Vec<AssignedTensor<F>>) -> Result<Vec<AssignedTensor<F>>, Error> {
+        Ok(inputs)
     }
+
+    fn expose_forward(
+        &self,
+        layouter: impl Layouter<F>,
+        forward_output: &Vec<AssignedTensor<F>>,
+        row: usize,
+    ) -> Result<(), ErrorFront>;
 }
