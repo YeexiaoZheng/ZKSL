@@ -65,14 +65,10 @@ pub trait Numeric<F: PrimeField> {
 
     fn num_cols_per_op(&self) -> usize;
 
-    fn forward(&self, inputs: Vec<AssignedTensor<F>>) -> Result<Vec<AssignedTensor<F>>, Error> {
-        Ok(inputs)
-    }
-
-    fn expose_forward(
+    fn forward(
         &self,
-        layouter: impl Layouter<F>,
-        forward_output: &Vec<AssignedTensor<F>>,
-        row: usize,
-    ) -> Result<(), ErrorFront>;
+        inputs: &Vec<AssignedTensor<F>>,
+    ) -> Result<Vec<AssignedTensor<F>>, Error> {
+        Ok(inputs.clone())
+    }
 }

@@ -9,7 +9,7 @@ use halo2_proofs::{
     halo2curves::ff::PrimeField,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, ErrorFront},
 };
-use ndarray::{Array, IxDyn, ShapeError};
+use ndarray::{s, Array, IxDyn, ShapeError};
 
 use crate::numerics::{
     dot::DotChip,
@@ -77,22 +77,24 @@ impl<F: PrimeField> NumericConsumer for FullyConnectedChip<F> {
 
 pub struct FullyConnectedCircuit<F: PrimeField> {
     pub config: LayerConfig<F>,
-    pub input: Vec<FieldTensor<F>>,
-    pub output: Vec<F>,
-    pub weight: Vec<F>,
+    pub input: FieldTensor<F>,
+    pub weight: FieldTensor<F>,
 }
 
 impl<F: PrimeField> FullyConnectedCircuit<F> {
-    pub fn construct(config: LayerConfig<F>) -> Self {
+    pub fn construct(
+        config: LayerConfig<F>,
+        input: FieldTensor<F>,
+        weight: FieldTensor<F>,
+    ) -> Self {
         Self {
             config,
-            input: vec![],
-            output: vec![],
-            weight: vec![],
+            input,
+            weight,
         }
     }
 
-    pub fn assign_inputs(
+    pub fn assign_tensors(
         &self,
         mut layouter: impl Layouter<F>,
         columns: &Vec<Column<Advice>>,
@@ -126,6 +128,38 @@ impl<F: PrimeField> FullyConnectedCircuit<F> {
             },
         )?)
     }
+
+    pub fn assign_tensor(
+        &self,
+        mut layouter: impl Layouter<F>,
+        columns: &Vec<Column<Advice>>,
+        tensor: &FieldTensor<F>,
+    ) -> Result<AssignedTensor<F>, Error> {
+        Ok(layouter.assign_region(
+            || "assign_tensors",
+            |mut region| {
+                let mut cell_idx = 0;
+                Ok(Array::from_shape_vec(
+                    IxDyn(tensor.shape()),
+                    tensor
+                        .iter()
+                        .map(|cell| {
+                            let row_idx = cell_idx / columns.len();
+                            let col_idx = cell_idx % columns.len();
+                            cell_idx += 1;
+                            Ok(region.assign_advice(
+                                || "assign tensor cell",
+                                columns[col_idx],
+                                row_idx,
+                                || Value::known(*cell),
+                            )?)
+                        })
+                        .collect::<Result<Vec<_>, ErrorFront>>()?,
+                )
+                .unwrap())
+            },
+        )?)
+    }
 }
 
 impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
@@ -149,18 +183,21 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
         let public = meta.instance_column();
         meta.enable_equality(public);
 
-        DotChip::<F>::configure(meta, _NumericConfig {
-            used_numerics: Arc::new(BTreeSet::new()),
-            k,
-            scale_factor: 1,
-            num_rows: (1 << k),
-            num_cols: 10,
-            columns,
-            fixed,
-            public,
-            use_selectors: true,
-            selectors: HashMap::new(),
-        })
+        DotChip::<F>::configure(
+            meta,
+            _NumericConfig {
+                used_numerics: Arc::new(BTreeSet::new()),
+                k,
+                scale_factor: 1,
+                num_rows: (1 << k),
+                num_cols: 10,
+                columns,
+                fixed,
+                public,
+                use_selectors: true,
+                selectors: HashMap::new(),
+            },
+        )
     }
 
     fn synthesize(
@@ -168,17 +205,55 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), ErrorFront> {
-        let dot_chip = DotChip::<F>::construct(config.clone());
-        let inputs = self
-            .assign_inputs(
+        // Check input and weight shapes
+        let input_shape = self.input.shape();
+        let weight_shape = self.weight.shape();
+        assert_eq!(input_shape.len(), 2);
+        assert_eq!(weight_shape.len(), 2);
+        assert_eq!(input_shape[1], weight_shape[0]);
+
+        // Construct dot chip
+        let dot_chip = DotChip::<F>::construct(config);
+
+        // Assign input and weight tensors
+        let input = self
+            .assign_tensor(
                 layouter.namespace(|| "assign_inputs"),
-                &config.columns,
+                &dot_chip.config.columns,
                 &self.input,
             )
             .unwrap();
+        let weight = self
+            .assign_tensor(
+                layouter.namespace(|| "assign_weights"),
+                &dot_chip.config.columns,
+                &self.weight,
+            )
+            .unwrap();
 
-        let outputs = dot_chip.forward(inputs).unwrap();
+        // Forward pass
+        let mut outputs = vec![];
+        for i in 0..input_shape[0] {
+            for j in 0..weight_shape[1] {
+                let input = input.slice(s![i, ..]).into_owned().into_dyn();
+                let weight = weight.slice(s![.., j]).into_owned().into_dyn();
+                let output = dot_chip.forward(&vec![input, weight]).unwrap();
+                outputs.extend(output.into_iter());
+            }
+        }
 
-        dot_chip.expose_forward(layouter.namespace(|| "expose_forward"), &outputs, 0)
+        // Constrain public output
+        let mut public_layouter = layouter.namespace(|| "public");
+        let mut i = 0;
+        for tensor in outputs.iter() {
+            for cell in tensor.iter() {
+                public_layouter
+                    .constrain_instance(cell.cell(), dot_chip.config.public, i)
+                    .unwrap();
+                i += 1;
+            }
+        }
+
+        Ok(())
     }
 }
