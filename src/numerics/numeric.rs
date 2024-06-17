@@ -12,7 +12,7 @@ use halo2_proofs::{
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum NumericType {
     Dot,
-    Adder,
+    Accumulator,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -64,6 +64,10 @@ pub trait Numeric<F: PrimeField> {
 
     fn num_input_cols_per_row(&self) -> usize;
 
+    fn num_output_cols_per_row(&self) -> usize {
+        1
+    }
+
     fn op_row_region(
         &self,
         region: &mut Region<F>,
@@ -111,10 +115,8 @@ pub trait Numeric<F: PrimeField> {
 
     fn forward(
         &self,
-        mut _layouter: impl Layouter<F>,
-        _inputs: &Vec<Vec<&AssignedCell<F, F>>>,
-        _constants: &Vec<&AssignedCell<F, F>>,
-    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
-        Ok(vec![])
-    }
+        layouter: impl Layouter<F>,
+        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
+        constants: &Vec<&AssignedCell<F, F>>,
+    ) -> Result<Vec<AssignedCell<F, F>>, Error>;
 }

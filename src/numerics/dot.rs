@@ -7,7 +7,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use crate::numerics::adder::AdderChip;
+use crate::numerics::accumulator::AccumulatorChip;
 
 use super::numeric::{Numeric, NumericType, _NumericConfig};
 
@@ -106,12 +106,10 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
         assert_eq!(input.len(), weight.len());
         assert_eq!(input.len(), self.num_input_cols_per_row());
 
-        println!("input len: {} weight len: {}", input.len(), weight.len());
-
         // Enable selectors
         if self.config.use_selectors {
             let selector = self.config.selectors.get(&NumericType::Dot).unwrap()[0];
-            selector.enable(region, row_offset).unwrap();
+            selector.enable(region, row_offset)?;
         }
 
         // Assign input and weight columns by copy advice
@@ -120,16 +118,13 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
             .iter()
             .enumerate()
             .map(|(i, cell)| cell.copy_advice(|| "", region, inp_cols[i], row_offset))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-
+            .collect::<Result<Vec<_>, _>>()?;
         let weight_cols = DotChip::<F>::get_weight_columns(&self.config);
         weight
             .iter()
             .enumerate()
             .map(|(i, cell)| cell.copy_advice(|| "", region, weight_cols[i], row_offset))
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
+            .collect::<Result<Vec<_>, _>>()?;
 
         // All columns need to be assigned include the blank column
         // This use zero to fill the blank column
@@ -140,25 +135,24 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
                 region,
                 self.config.columns[self.config.columns.len() - 2],
                 row_offset,
-            )
-            .unwrap();
+            )?;
         }
 
-        let res = region
-            .assign_advice(
-                || "",
-                self.config.columns[self.config.columns.len() - 1],
-                row_offset,
-                || {
-                    input
-                        .iter()
-                        .zip(weight.iter())
-                        .map(|(a, b)| a.value().map(|x: &F| *x) * b.value())
-                        .reduce(|a, b| a + b)
-                        .unwrap()
-                },
-            )
+        // Calculate the dot product
+        let value = input
+            .iter()
+            .zip(weight.iter())
+            .map(|(a, b)| a.value().copied() * b.value())
+            .reduce(|a, b| a + b)
             .unwrap();
+
+        // Assign the output column
+        let res = region.assign_advice(
+            || "",
+            self.config.columns[self.config.columns.len() - 1],
+            row_offset,
+            || value,
+        )?;
 
         Ok(vec![res])
     }
@@ -173,10 +167,11 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
         let mut input = inputs[0].clone();
         let mut weight = inputs[1].clone();
         assert_eq!(input.len(), weight.len());
+        let cols_per_row = self.num_input_cols_per_row();
+        let zero = constants[0];
 
         // Fill the input and weight columns to be multiple of num_input_cols_per_row
-        let zero = constants[0];
-        while input.len() % self.num_input_cols_per_row() != 0 {
+        while input.len() % cols_per_row != 0 {
             input.push(&zero);
             weight.push(&zero);
         }
@@ -186,29 +181,30 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
             || "dot rows",
             |mut region| {
                 let mut outputs = vec![];
-                for i in 0..input.len() / self.num_input_cols_per_row() {
-                    let ipt = input[i * self.num_input_cols_per_row()
-                        ..(i + 1) * self.num_input_cols_per_row()]
-                        .to_vec();
-                    let wgt = weight[i * self.num_input_cols_per_row()
-                        ..(i + 1) * self.num_input_cols_per_row()]
-                        .to_vec();
+                for i in 0..input.len() / cols_per_row {
                     let res = self
-                        .op_row_region(&mut region, i, &vec![ipt, wgt], constants)
+                        .op_row_region(
+                            &mut region,
+                            i,
+                            &vec![
+                                input[i * cols_per_row..(i + 1) * cols_per_row].to_vec(),
+                                weight[i * cols_per_row..(i + 1) * cols_per_row].to_vec(),
+                            ],
+                            constants,
+                        )
                         .unwrap();
                     outputs.push(res[0].clone());
                 }
                 Ok(outputs)
             },
         )?;
-        // println!("outputs len: {} outputs: {:?}", outputs.len(), outputs);
-        println!("outputs len: {}", outputs.len());
 
-        // Use adder to sum up all outputs
-        let adder_chip = AdderChip::<F>::construct(self.config.clone());
-        let tmp = outputs.iter().map(|x| x).collect::<Vec<_>>();
-        Ok(adder_chip
-            .forward(layouter.namespace(|| "dot adder"), &vec![tmp], constants)
-            .unwrap())
+        // Use accumulator to sum up all outputs
+        let acc = AccumulatorChip::<F>::construct(self.config.clone());
+        Ok(acc.forward(
+            layouter.namespace(|| "dot adder"),
+            &vec![outputs.iter().collect::<Vec<_>>()],
+            &vec![zero],
+        )?)
     }
 }

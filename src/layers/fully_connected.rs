@@ -13,7 +13,7 @@ use halo2_proofs::{
 use ndarray::{s, Array, IxDyn, ShapeError};
 
 use crate::numerics::{
-    adder::AdderChip,
+    accumulator::AccumulatorChip,
     dot::DotChip,
     numeric::{Numeric, NumericType, _NumericConfig},
 };
@@ -246,7 +246,7 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
             selectors: HashMap::new(),
         };
 
-        let numeric_config = AdderChip::<F>::configure(meta, numeric_config);
+        let numeric_config = AccumulatorChip::<F>::configure(meta, numeric_config);
 
         DotChip::<F>::configure(meta, numeric_config)
     }
@@ -288,10 +288,6 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
             .assign_constant(layouter.namespace(|| "assign_constants"), config_rc.clone())
             .unwrap();
 
-        println!("input shape: {:?}", input.shape());
-        println!("weight shape: {:?}", weight.shape());
-        // println!("constants: {:?}", constants.get(&0).unwrap());
-
         // Forward pass
         let mut outputs = vec![];
         for i in 0..input_shape[0] {
@@ -306,9 +302,6 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
                     .into_iter()
                     .map(|x| x.as_ref())
                     .collect::<Vec<_>>();
-                // println!("input len: {} input: {:?}", input.len(), input);
-                // println!("-------------------------------------------------------------");
-                // println!("weight len: {} weight: {:?}", weight.len(), weight);
                 let output = dot_chip
                     .forward(
                         layouter.namespace(|| format!("dot_{}_{}", i, j)),
@@ -319,10 +312,6 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
                 outputs.extend(output.into_iter());
             }
         }
-
-        println!("*****************************************************************");
-        println!("outputs len: {} outputs: {:?}", outputs.len(), outputs);
-        println!("*****************************************************************");
 
         // Constrain public output
         let mut public_layouter = layouter.namespace(|| "public");
