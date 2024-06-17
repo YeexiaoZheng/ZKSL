@@ -306,9 +306,9 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
                     .into_iter()
                     .map(|x| x.as_ref())
                     .collect::<Vec<_>>();
-                println!("input len: {} input: {:?}", input.len(), input);
-                println!("-------------------------------------------------------------");
-                println!("weight len: {} weight: {:?}", weight.len(), weight);
+                // println!("input len: {} input: {:?}", input.len(), input);
+                // println!("-------------------------------------------------------------");
+                // println!("weight len: {} weight: {:?}", weight.len(), weight);
                 let output = dot_chip
                     .forward(
                         layouter.namespace(|| format!("dot_{}_{}", i, j)),
@@ -327,10 +327,7 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
         // Constrain public output
         let mut public_layouter = layouter.namespace(|| "public");
         for (i, cell) in outputs.iter().enumerate() {
-            match public_layouter.constrain_instance(cell.cell(), dot_chip.config.public, i) {
-                Ok(_) => println!("idx: {} OK", i),
-                Err(e) => println!("idx: {} Error: {:?}", i, e),
-            }
+            public_layouter.constrain_instance(cell.cell(), dot_chip.config.public, i)?;
         }
 
         Ok(())

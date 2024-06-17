@@ -36,18 +36,14 @@ fn main() {
             .collect::<Vec<_>>(),
     )
     .unwrap();
-    // let f_output = Array::from_shape_vec(
-    //     IxDyn(o_output.shape()),
-    //     o_output.iter().map(|x| to_field(*x)).collect::<Vec<_>>(),
-    // )
-    // .unwrap();
+    let f_output = Array::from_shape_vec(
+        IxDyn(o_output.shape()),
+        o_output.iter().map(|x| to_field(*x)).collect::<Vec<_>>(),
+    )
+    .unwrap();
 
     // let input = f_input.clone().into_iter().collect::<Vec<_>>();
-    // let output = f_output.clone().into_iter().collect::<Vec<_>>();
-    let output = vec![8, 8, 8, 8, 8, 8, 8, 8, 8, 8]
-        .iter()
-        .map(|x| to_field(*x))
-        .collect();
+    let output = f_output.clone().into_iter().collect::<Vec<_>>();
 
     let circuit = FullyConnectedCircuit::construct(f_input, f_hidden_layer);
 

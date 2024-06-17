@@ -42,7 +42,7 @@ impl<F: PrimeField> DotChip<F> {
                 .iter()
                 .map(|col| meta.query_advice(*col, Rotation::cur()))
                 .collect::<Vec<_>>();
-            let gate_weights = columns[num_inputs..columns.len() - 1]
+            let gate_weights = columns[num_inputs..2 * num_inputs]
                 .to_vec()
                 .iter()
                 .map(|col| meta.query_advice(*col, Rotation::cur()))
@@ -170,9 +170,16 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
         constants: &Vec<&AssignedCell<F, F>>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         // Check input and weight shapes
-        let input = inputs[0].clone();
-        let weight = inputs[1].clone();
+        let mut input = inputs[0].clone();
+        let mut weight = inputs[1].clone();
         assert_eq!(input.len(), weight.len());
+
+        // Fill the input and weight columns to be multiple of num_input_cols_per_row
+        let zero = constants[0];
+        while input.len() % self.num_input_cols_per_row() != 0 {
+            input.push(&zero);
+            weight.push(&zero);
+        }
 
         // Assign input and weight columns
         let outputs = layouter.assign_region(
@@ -194,7 +201,8 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
                 Ok(outputs)
             },
         )?;
-        println!("outputs len: {} outputs: {:?}", outputs.len(), outputs);
+        // println!("outputs len: {} outputs: {:?}", outputs.len(), outputs);
+        println!("outputs len: {}", outputs.len());
 
         // Use adder to sum up all outputs
         let adder_chip = AdderChip::<F>::construct(self.config.clone());
