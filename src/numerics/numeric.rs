@@ -10,7 +10,7 @@ use halo2_proofs::{
 };
 use num_bigint::{BigUint, ToBigUint};
 
-use crate::layers::layer::{AssignedTensor, FieldTensor};
+use crate::layers::layer::{AssignedTensor, AssignedTensorRef, FieldTensor};
 //   use num_traits::cast::ToPrimitive;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
@@ -65,10 +65,13 @@ pub trait Numeric<F: PrimeField> {
 
     fn num_cols_per_op(&self) -> usize;
 
+    fn num_input_cols_per_row(&self) -> usize;
+
     fn forward(
         &self,
-        inputs: &Vec<AssignedTensor<F>>,
+        mut layouter: impl Layouter<F>,
+        inputs: &Vec<AssignedTensorRef<F>>,
     ) -> Result<Vec<AssignedTensor<F>>, Error> {
-        Ok(inputs.clone())
+        Ok(vec![])
     }
 }

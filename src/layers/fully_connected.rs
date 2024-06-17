@@ -235,8 +235,8 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
         let mut outputs = vec![];
         for i in 0..input_shape[0] {
             for j in 0..weight_shape[1] {
-                let input = input.slice(s![i, ..]).into_owned().into_dyn();
-                let weight = weight.slice(s![.., j]).into_owned().into_dyn();
+                let input = input.slice(s![i, ..]).into_dyn();
+                let weight = weight.slice(s![.., j]).into_dyn();
                 let output = dot_chip.forward(&vec![input, weight]).unwrap();
                 outputs.extend(output.into_iter());
             }

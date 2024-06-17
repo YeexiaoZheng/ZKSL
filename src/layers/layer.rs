@@ -1,5 +1,5 @@
 use halo2_proofs::{circuit::AssignedCell, halo2curves::ff::PrimeField};
-use ndarray::{Array, IxDyn, ShapeError};
+use ndarray::{Array, ArrayView, IxDyn, ShapeError};
 
 use crate::{
     model::FormatLayer, numerics::numeric::NumericType,
@@ -18,6 +18,7 @@ pub type Tensor = Array<i64, IxDyn>;
 pub type FieldTensor<F> = Array<F, IxDyn>;
 pub type CellRc<F> = AssignedCell<F, F>;
 pub type AssignedTensor<F> = Array<CellRc<F>, IxDyn>;
+pub type AssignedTensorRef<'a, F> = ArrayView<'a, AssignedCell<F, F>, IxDyn>;
 
 #[derive(Clone, Debug, Default)]
 pub struct LayerConfig<F: PrimeField> {
