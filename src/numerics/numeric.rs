@@ -10,12 +10,13 @@ use halo2_proofs::{
 };
 use num_bigint::{BigUint, ToBigUint};
 
-use crate::layers::layer::{AssignedTensor, AssignedTensorRef, FieldTensor};
+use crate::layers::layer::{AssignedTensor, AssignedTensorRef, CellRc, FieldTensor};
 //   use num_traits::cast::ToPrimitive;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum NumericType {
     Dot,
+    Adder,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -49,7 +50,7 @@ pub struct _NumericConfig {
 
     // columns
     pub columns: Vec<Column<Advice>>,
-    pub fixed: Vec<Column<Fixed>>,
+    pub constants: Vec<Column<Fixed>>,
     pub public: Column<Instance>,
 
     // selectors
@@ -67,11 +68,57 @@ pub trait Numeric<F: PrimeField> {
 
     fn num_input_cols_per_row(&self) -> usize;
 
+    fn op_row_region(
+        &self,
+        region: &mut Region<F>,
+        row_offset: usize,
+        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
+        constants: &Vec<&AssignedCell<F, F>>,
+    ) -> Result<Vec<AssignedCell<F, F>>, Error>;
+
+    // The caller is required to ensure that the inputs are of the correct length.
+    fn op_aligned_rows(
+        &self,
+        mut layouter: impl Layouter<F>,
+        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
+        constants: &Vec<&AssignedCell<F, F>>,
+    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
+        // Sanity check inputs
+        for inp in inputs.iter() {
+            assert_eq!(inp.len() % self.num_input_cols_per_row(), 0);
+        }
+
+        let outputs = layouter.assign_region(
+            || format!("gadget {}", self.name()),
+            |mut region| {
+                let mut outputs = vec![];
+                for i in 0..inputs[0].len() / self.num_input_cols_per_row() {
+                    let mut vec_inputs_row = vec![];
+                    for inp in inputs.iter() {
+                        vec_inputs_row.push(
+                            inp[i * self.num_input_cols_per_row()
+                                ..(i + 1) * self.num_input_cols_per_row()]
+                                .to_vec(),
+                        );
+                    }
+                    let row_outputs =
+                        self.op_row_region(&mut region, i, &vec_inputs_row, &constants).unwrap();
+                    assert_eq!(row_outputs.len(), 1);
+                    outputs.extend(row_outputs);
+                }
+                Ok(outputs)
+            },
+        )?;
+
+        Ok(outputs)
+    }
+
     fn forward(
         &self,
         mut layouter: impl Layouter<F>,
-        inputs: &Vec<AssignedTensorRef<F>>,
-    ) -> Result<Vec<AssignedTensor<F>>, Error> {
+        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
+        constants: &Vec<&AssignedCell<F, F>>,
+    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         Ok(vec![])
     }
 }

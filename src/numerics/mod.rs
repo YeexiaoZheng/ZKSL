@@ -3,3 +3,4 @@ pub mod numeric;
 
 // numeric mods
 pub mod dot;
+pub mod adder;

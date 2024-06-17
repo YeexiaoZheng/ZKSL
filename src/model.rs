@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, marker::PhantomData, sync::Mutex};
+use std::{collections::BTreeSet, marker::PhantomData, rc::Rc, sync::Mutex};
 
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
@@ -97,12 +97,12 @@ impl<F: PrimeField> ModelCircuit<F> {
                                 let row_idx = cell_idx / columns.len();
                                 let col_idx = cell_idx % columns.len();
                                 cell_idx += 1;
-                                Ok(region.assign_advice(
+                                Ok(Rc::new(region.assign_advice(
                                     || "assign tensor cell",
                                     columns[col_idx],
                                     row_idx,
                                     || Value::known(*cell),
-                                )?)
+                                )?))
                             })
                             .collect::<Result<Vec<_>, ErrorFront>>()?;
                         Ok(Array::from_shape_vec(IxDyn(tensor.shape()), assigned_tensor).unwrap())

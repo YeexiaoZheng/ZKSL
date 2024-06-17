@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, rc::Rc};
 
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region},
@@ -7,19 +7,22 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use crate::layers::layer::{AssignedTensor, AssignedTensorRef};
+use crate::{
+    layers::layer::{AssignedTensor, AssignedTensorRef, CellRc},
+    numerics::adder::AdderChip,
+};
 
 use super::numeric::{Numeric, NumericConfig, NumericType, _NumericConfig};
 
 type DotConfig = _NumericConfig;
 
 pub struct DotChip<F: PrimeField> {
-    pub config: DotConfig,
+    pub config: Rc<DotConfig>,
     _marker: PhantomData<F>,
 }
 
 impl<F: PrimeField> DotChip<F> {
-    pub fn construct(config: DotConfig) -> Self {
+    pub fn construct(config: Rc<DotConfig>) -> Self {
         Self {
             config,
             _marker: PhantomData,
@@ -61,7 +64,7 @@ impl<F: PrimeField> DotChip<F> {
         let mut selectors = numeric_config.selectors;
         selectors.insert(NumericType::Dot, vec![selector]);
 
-        _NumericConfig {
+        DotConfig {
             columns: numeric_config.columns,
             selectors,
             ..numeric_config
@@ -77,13 +80,27 @@ impl<F: PrimeField> DotChip<F> {
         let num_inputs = (config.columns.len() - 1) / 2;
         config.columns[num_inputs..config.columns.len() - 1].to_vec()
     }
+}
+
+impl<F: PrimeField> Numeric<F> for DotChip<F> {
+    fn name(&self) -> String {
+        "Dot".to_string()
+    }
+
+    fn num_cols_per_op(&self) -> usize {
+        self.config.columns.len()
+    }
+
+    fn num_input_cols_per_row(&self) -> usize {
+        (self.config.columns.len() - 1) / 2
+    }
 
     fn op_row_region(
         &self,
         region: &mut Region<F>,
         row_offset: usize,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,
-        zeros: &Vec<&AssignedCell<F, F>>,
+        constants: &Vec<&AssignedCell<F, F>>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         // Check input and weight shapes
         assert_eq!(inputs.len(), 2);
@@ -91,6 +108,8 @@ impl<F: PrimeField> DotChip<F> {
         let weight = &inputs[1];
         assert_eq!(input.len(), weight.len());
         assert_eq!(input.len(), self.num_input_cols_per_row());
+
+        println!("input len: {} weight len: {}", input.len(), weight.len());
 
         // Enable selectors
         if self.config.use_selectors {
@@ -115,8 +134,9 @@ impl<F: PrimeField> DotChip<F> {
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
 
-        // All columns need to be assigned
-        let zero = zeros[0];
+        // All columns need to be assigned include the blank column
+        // This use zero to fill the blank column
+        let zero = constants[0];
         if self.config.columns.len() % 2 == 0 {
             zero.copy_advice(
                 || "",
@@ -145,73 +165,45 @@ impl<F: PrimeField> DotChip<F> {
 
         Ok(vec![res])
     }
-}
-
-impl<F: PrimeField> Numeric<F> for DotChip<F> {
-    fn name(&self) -> String {
-        "Dot".to_string()
-    }
-
-    fn num_cols_per_op(&self) -> usize {
-        self.config.columns.len()
-    }
-
-    fn num_input_cols_per_row(&self) -> usize {
-        self.config.columns.len() - 1
-    }
 
     fn forward(
         &self,
         mut layouter: impl Layouter<F>,
-        inputs: &Vec<AssignedTensorRef<F>>,
-    ) -> Result<Vec<AssignedTensor<F>>, Error> {
+        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
+        constants: &Vec<&AssignedCell<F, F>>,
+    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         // Check input and weight shapes
         let input = inputs[0].clone();
         let weight = inputs[1].clone();
-        assert_eq!(input.ndim(), 1);
-        assert_eq!(weight.ndim(), 1);
-        assert_eq!(input.shape(), weight.shape());
-
-        // Turn input and weight into Vec
-        let input = input.into_iter().collect::<Vec<_>>();
-        let weight = weight.into_iter().collect::<Vec<_>>();
+        assert_eq!(input.len(), weight.len());
 
         // Assign input and weight columns
-        let outputs = layouter
-            .assign_region(
-                || "dot rows",
-                |mut region| {
-                    let mut outputs = vec![];
-                    for i in 0..inputs.len() / self.num_input_cols_per_row() {
-                        let input = input[i * self.num_input_cols_per_row()
-                            ..(i + 1) * self.num_input_cols_per_row()]
-                            .to_vec();
-                        let weight = weight[i * self.num_input_cols_per_row()
-                            ..(i + 1) * self.num_input_cols_per_row()]
-                            .to_vec();
-                        let res = self
-                            .op_row_region(
-                                &mut region,
-                                i,
-                                &vec![input, weight],
-                                &vec![zero.clone()],
-                            ).unwrap();
-                        outputs.push(res[0].clone());
-                    }
-                    Ok(outputs)
-                },
-            )?;
-        println!("outputs len: {}", outputs.len());
+        let outputs = layouter.assign_region(
+            || "dot rows",
+            |mut region| {
+                let mut outputs = vec![];
+                for i in 0..input.len() / self.num_input_cols_per_row() {
+                    let ipt = input[i * self.num_input_cols_per_row()
+                        ..(i + 1) * self.num_input_cols_per_row()]
+                        .to_vec();
+                    let wgt = weight[i * self.num_input_cols_per_row()
+                        ..(i + 1) * self.num_input_cols_per_row()]
+                        .to_vec();
+                    let res = self
+                        .op_row_region(&mut region, i, &vec![ipt, wgt], constants)
+                        .unwrap();
+                    outputs.push(res[0].clone());
+                }
+                Ok(outputs)
+            },
+        )?;
+        println!("outputs len: {} outputs: {:?}", outputs.len(), outputs);
 
-        // let adder_chip = AdderChip::<F>::construct(self.config.clone());
-        // let tmp = outputs.iter().map(|x| x).collect::<Vec<_>>();
-        // Ok(adder_chip
-        //     .forward(
-        //         layouter.namespace(|| "dot prod adder"),
-        //         &vec![tmp],
-        //         single_inputs,
-        //     )
-        //     .unwrap())
-        Ok(vec![])
+        // Use adder to sum up all outputs
+        let adder_chip = AdderChip::<F>::construct(self.config.clone());
+        let tmp = outputs.iter().map(|x| x).collect::<Vec<_>>();
+        Ok(adder_chip
+            .forward(layouter.namespace(|| "dot adder"), &vec![tmp], constants)
+            .unwrap())
     }
 }
