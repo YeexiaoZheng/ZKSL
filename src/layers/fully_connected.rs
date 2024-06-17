@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
     marker::PhantomData,
-    ops::Add,
     rc::Rc,
     sync::Arc,
 };
@@ -16,7 +15,7 @@ use ndarray::{s, Array, IxDyn, ShapeError};
 use crate::numerics::{
     adder::AdderChip,
     dot::DotChip,
-    numeric::{self, Numeric, NumericType, _NumericConfig},
+    numeric::{Numeric, NumericType, _NumericConfig},
 };
 
 use super::layer::{

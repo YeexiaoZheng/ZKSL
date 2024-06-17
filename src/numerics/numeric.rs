@@ -6,12 +6,8 @@ use std::{
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region},
     halo2curves::group::ff::PrimeField,
-    plonk::{Advice, Column, Error, ErrorFront, Fixed, Instance, Selector, TableColumn},
+    plonk::{Advice, Column, Error, Fixed, Instance, Selector, TableColumn},
 };
-use num_bigint::{BigUint, ToBigUint};
-
-use crate::layers::layer::{AssignedTensor, AssignedTensorRef, CellRc, FieldTensor};
-//   use num_traits::cast::ToPrimitive;
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum NumericType {
@@ -115,9 +111,9 @@ pub trait Numeric<F: PrimeField> {
 
     fn forward(
         &self,
-        mut layouter: impl Layouter<F>,
-        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
-        constants: &Vec<&AssignedCell<F, F>>,
+        mut _layouter: impl Layouter<F>,
+        _inputs: &Vec<Vec<&AssignedCell<F, F>>>,
+        _constants: &Vec<&AssignedCell<F, F>>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         Ok(vec![])
     }

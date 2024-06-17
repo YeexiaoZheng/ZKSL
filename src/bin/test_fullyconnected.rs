@@ -1,4 +1,4 @@
-use halo2_proofs::{circuit, dev::MockProver, halo2curves::bn256::Fr};
+use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use ndarray::{Array, Dim, IxDyn};
 use zkml::layers::fully_connected::FullyConnectedCircuit;
 
@@ -18,9 +18,9 @@ fn main() {
     let o_hidden_layer =
         Array::<i64, Dim<_>>::from_shape_vec([10, 10], v_hidden_layer.clone()).unwrap();
     let o_output = o_input.dot(&o_hidden_layer);
-    // println!("{:?}", o_input);
-    // println!("{:?}", o_hidden_layer);
-    // println!("{:?}", o_output);
+    println!("{:?}", o_input);
+    println!("{:?}", o_hidden_layer);
+    println!("{:?}", o_output);
 
     // field matrix
     let f_input = Array::from_shape_vec(
@@ -36,14 +36,14 @@ fn main() {
             .collect::<Vec<_>>(),
     )
     .unwrap();
-    let f_output = Array::from_shape_vec(
-        IxDyn(o_output.shape()),
-        o_output.iter().map(|x| to_field(*x)).collect::<Vec<_>>(),
-    )
-    .unwrap();
+    // let f_output = Array::from_shape_vec(
+    //     IxDyn(o_output.shape()),
+    //     o_output.iter().map(|x| to_field(*x)).collect::<Vec<_>>(),
+    // )
+    // .unwrap();
 
-    let input = f_input.clone().into_iter().collect::<Vec<_>>();
-    let output = f_output.clone().into_iter().collect::<Vec<_>>();
+    // let input = f_input.clone().into_iter().collect::<Vec<_>>();
+    // let output = f_output.clone().into_iter().collect::<Vec<_>>();
     let output = vec![8, 8, 8, 8, 8, 8, 8, 8, 8, 8]
         .iter()
         .map(|x| to_field(*x))

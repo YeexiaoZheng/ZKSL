@@ -7,8 +7,6 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use crate::layers::layer::{AssignedTensor, AssignedTensorRef, CellRc};
-
 use super::numeric::{Numeric, NumericType, _NumericConfig};
 
 type AdderConfig = _NumericConfig;

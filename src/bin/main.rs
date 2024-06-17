@@ -1,7 +1,6 @@
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 
-use ndarray::{Array, Dim, IxDyn};
-use zkml::{graph::Graph, model::{FormatLayer, ModelCircuit}, utils::loader::load_from_json};
+use zkml::{graph::Graph, model::ModelCircuit, utils::loader::load_from_json};
 
 fn main() {
     // let k = 3;
@@ -22,5 +21,5 @@ fn main() {
 
     let circuit = ModelCircuit::<Fr>::construct(3, graph);
 
-    // MockProver::run(3, &circuit, vec![input, output]).unwrap();
+    MockProver::run(3, &circuit, vec![]).unwrap();
 }

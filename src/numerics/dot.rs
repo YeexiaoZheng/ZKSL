@@ -7,12 +7,9 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use crate::{
-    layers::layer::{AssignedTensor, AssignedTensorRef, CellRc},
-    numerics::adder::AdderChip,
-};
+use crate::numerics::adder::AdderChip;
 
-use super::numeric::{Numeric, NumericConfig, NumericType, _NumericConfig};
+use super::numeric::{Numeric, NumericType, _NumericConfig};
 
 type DotConfig = _NumericConfig;
 
