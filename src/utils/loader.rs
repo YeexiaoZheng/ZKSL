@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr, Map};
 
@@ -49,13 +47,13 @@ pub fn load_from_json(_file_path: &str) -> GraphJson {
         "nodes": [
             {
                 "op_type": "Gemm",
-                "inputs": ["input", "mlp1.weight", "mlp1.bias"],
+                "inputs": ["input", "mlp1.weight"],
                 "outputs": ["/mlp1/Gemm_output_0"],
                 "attributes": {"alpha": 1.0, "beta": 1.0, "transB": 1}
             },
             {
                 "op_type": "Gemm",
-                "inputs": ["/mlp1/Gemm_output_0", "mlp2.weight", "mlp2.bias"],
+                "inputs": ["/mlp1/Gemm_output_0", "mlp2.weight"],
                 "outputs": ["output"],
                 "attributes": {"alpha": 1.0, "beta": 1.0, "transB": 1}
             }

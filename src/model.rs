@@ -1,30 +1,36 @@
-use std::{collections::BTreeSet, marker::PhantomData, rc::Rc, sync::Mutex};
+use std::{
+    collections::{BTreeSet, HashMap},
+    hash::Hash,
+    marker::PhantomData,
+    rc::Rc,
+    sync::Mutex,
+};
 
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     halo2curves::ff::{FromUniformBytes, PrimeField},
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, ErrorFront, Instance},
+    poly::ipa::strategy::Accumulator,
 };
 use ndarray::{Array, Dim, IxDyn};
 
 use crate::{
-    graph::Graph,
+    graph::{Graph, Node},
     layers::{
         self,
-        // layer::{AssignedTensor, ConfigLayer, FieldTensor, Layer, LayerConfig, LayerType},
+        fully_connected::{FullyConnectedChip, FullyConnectedLayer},
+        layer::{self, ConfigLayer, Layer, LayerConfig, LayerType}, // layer::{AssignedTensor, ConfigLayer, FieldTensor, Layer, LayerConfig, LayerType},
     },
     numerics::{
+        accumulator::AccumulatorChip,
         dot::DotChip,
         numeric::{NumericConfig, NumericType},
     },
-    utils::matcher::{match_layer_name_to_layer_type, match_layer_type_to_consumer},
+    utils::{
+        helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
+        matcher::{match_layer_name_to_layer_type, match_layer_type_to_consumer},
+    },
 };
-
-// use lazy_static::lazy_static;
-// lazy_static! {
-//     pub static ref NUMERIC_CONFIG: Mutex<NumericConfig> = Mutex::new(NumericConfig::default());
-//     // pub static ref PUBLIC_VALS: Mutex<Vec<BigUint>> = Mutex::new(vec![]);
-// }
 
 #[derive(Clone, Debug, Default)]
 pub struct FormatLayer<F: PrimeField> {
@@ -36,145 +42,268 @@ pub struct FormatLayer<F: PrimeField> {
     pub field_weights: Array<F, IxDyn>,
 }
 
-// #[derive(Clone, Debug)]
-// pub struct ModelCircuit<F: PrimeField> {
-//     pub graph: Graph,
-//     pub used_numerics: BTreeSet<NumericType>,
-//     pub numeric_config: Rc<NumericConfig>,
-//     pub layer_chips: Vec<LayerType>,
-//     pub layer_configs: Vec<LayerConfig<F>>,
-// }
+#[derive(Clone, Debug)]
+pub struct ModelCircuit<F: PrimeField> {
+    pub graph: Graph,
+    pub used_numerics: BTreeSet<NumericType>,
+    pub field_tensor_map: HashMap<String, FieldTensor<F>>,
+    pub layer_chips: Vec<LayerType>,
+    pub layer_configs: Vec<LayerConfig<F>>,
+}
 
-// #[derive(Clone, Debug)]
-// pub struct ModelConfig<F: PrimeField> {
-//     pub numeric_config: NumericConfig,
-//     pub public: Column<Instance>,
-//     pub _marker: PhantomData<F>,
-// }
+#[derive(Clone, Debug)]
+pub struct ModelConfig<F: PrimeField> {
+    pub numeric_config: Rc<NumericConfig>,
+    pub public: Column<Instance>,
+    pub _marker: PhantomData<F>,
+}
 
-// impl<F: PrimeField> ModelCircuit<F> {
-//     pub fn construct(k: usize, graph: Graph) -> Self {
-//         let layers = &graph.nodes;
-//         let mut layer_configs = vec![];
-//         let mut layer_chips = vec![];
-//         let mut used_numerics = BTreeSet::new();
-//         for layer in layers.iter() {
-//             let layer_type = match_layer_name_to_layer_type(layer.op_type.clone());
-//             // let layer_config = LayerConfig::<F>::construct(layer.clone());
-//             // layer_configs.push(layer_config.clone());
-//             // layer_chips.push(layer_type);
-//             // used_numerics.extend(
-//             //     match_layer_type_to_consumer::<F>(layer_type, layer_config)
-//             //         .used_numerics()
-//             //         .iter(),
-//             // )
-//         }
-//         Self {
-//             k,
-//             graph,
-//             layer_chips,
-//             layer_configs,
-//             used_numerics,
-//         }
-//     }
+impl<F: PrimeField> ModelCircuit<F> {
+    pub fn construct(graph: Graph) -> Self {
+        let layers = &graph.nodes;
+        let mut layer_configs = vec![];
+        let mut layer_chips = vec![];
+        let mut used_numerics = BTreeSet::new();
+        for layer in layers.iter() {
+            let layer_type = match_layer_name_to_layer_type(layer.op_type.clone());
+            // let layer_config = LayerConfig::<F>::construct(layer.clone());
+            // layer_configs.push(layer_config.clone());
+            layer_chips.push(layer_type);
+            used_numerics.extend(
+                match_layer_type_to_consumer::<F>(layer_type)
+                    .used_numerics()
+                    .iter(),
+            )
+        }
 
-//     pub fn assign_tensors(
-//         &self,
-//         mut layouter: impl Layouter<F>,
-//         columns: &Vec<Column<Advice>>,
-//         tensors: &Vec<FieldTensor<F>>,
-//     ) -> Result<Vec<AssignedTensor<F>>, Error> {
-//         Ok(layouter.assign_region(
-//             || "assign_tensors",
-//             |mut region| {
-//                 let mut cell_idx = 0;
-//                 let assigned_tensors = tensors
-//                     .iter()
-//                     .map(|tensor| {
-//                         let assigned_tensor = tensor
-//                             .iter()
-//                             .map(|cell| {
-//                                 let row_idx = cell_idx / columns.len();
-//                                 let col_idx = cell_idx % columns.len();
-//                                 cell_idx += 1;
-//                                 Ok(Rc::new(region.assign_advice(
-//                                     || "assign tensor cell",
-//                                     columns[col_idx],
-//                                     row_idx,
-//                                     || Value::known(*cell),
-//                                 )?))
-//                             })
-//                             .collect::<Result<Vec<_>, ErrorFront>>()?;
-//                         Ok(Array::from_shape_vec(IxDyn(tensor.shape()), assigned_tensor).unwrap())
-//                     })
-//                     .collect::<Result<Vec<_>, ErrorFront>>()?;
-//                 Ok(assigned_tensors)
-//             },
-//         )?)
-//     }
+        let field_tensor_map = graph
+            .tensor_map
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    Array::from_shape_vec(
+                        v.shape(),
+                        v.iter().map(|x| to_field::<F>(x.clone())).collect(),
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect();
 
-//     pub fn forward(&self) {
-//         for layer in self.graph.nodes.iter() {
-//             todo!("forward")
-//         }
-//     }
-// }
+        Self {
+            graph,
+            used_numerics,
+            field_tensor_map,
+            layer_chips,
+            layer_configs,
+        }
+    }
 
-// impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
-//     type Config = ModelConfig<F>;
-//     type FloorPlanner = SimpleFloorPlanner;
+    pub fn assign_tensor_map(
+        &self,
+        mut layouter: impl Layouter<F>,
+        columns: &Vec<Column<Advice>>,
+        tensors_map: &HashMap<String, FieldTensor<F>>,
+    ) -> Result<HashMap<String, AssignedTensor<F>>, Error> {
+        Ok(layouter.assign_region(
+            || "assign_tensors_map",
+            |mut region| {
+                let mut cell_idx = 0;
+                let assigned_tensors = tensors_map
+                    .iter()
+                    .map(|(key, tensor)| {
+                        let assigned_tensor = tensor
+                            .iter()
+                            .map(|cell| {
+                                let row_idx = cell_idx / columns.len();
+                                let col_idx = cell_idx % columns.len();
+                                cell_idx += 1;
+                                Ok(Rc::new(region.assign_advice(
+                                    || "assign tensor cell",
+                                    columns[col_idx],
+                                    row_idx,
+                                    || Value::known(*cell),
+                                )?))
+                            })
+                            .collect::<Result<Vec<_>, ErrorFront>>()?;
+                        Ok((
+                            key.clone(),
+                            match Array::from_shape_vec(IxDyn(tensor.shape()), assigned_tensor) {
+                                Ok(x) => x,
+                                Err(e) => panic!(
+                                    "Error occurs at ModelCircuit.assign_tensors_map: {:?}",
+                                    e
+                                ),
+                            },
+                        ))
+                    })
+                    .collect::<Result<HashMap<_, _>, ErrorFront>>()?;
+                Ok(assigned_tensors)
+            },
+        )?)
+    }
 
-//     fn without_witnesses(&self) -> Self {
-//         todo!()
-//     }
+    pub fn assign_constants(
+        &self,
+        mut layouter: impl Layouter<F>,
+        config: Rc<NumericConfig>,
+    ) -> Result<HashMap<i64, CellRc<F>>, Error> {
+        let sf = config.scale_factor;
+        // let min_val = config.min_val;
+        let min_val = -(1 << (config.k - 1));
+        // let max_val = config.max_val;
 
-//     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-//         // private column
-//         let column = meta.advice_column();
-//         meta.enable_equality(column);
+        Ok(layouter.assign_region(
+            || "constants",
+            |mut region| {
+                let mut constants: HashMap<i64, CellRc<F>> = HashMap::new();
 
-//         // public column
-//         let public = meta.instance_column();
-//         meta.enable_equality(public);
+                let vals = vec![0 as i64, 1, sf as i64 /*min_val, max_val*/];
+                let shift_val_i64 = -min_val * 2; // FIXME
+                let shift_val_f = F::from(shift_val_i64 as u64);
+                for (i, val) in vals.iter().enumerate() {
+                    let cell = region.assign_fixed(
+                        || format!("constant_{}", i),
+                        config.constants[0],
+                        i,
+                        || Value::known(F::from((val + shift_val_i64) as u64) - shift_val_f),
+                    )?;
+                    constants.insert(*val, Rc::new(cell));
+                }
 
-//         // fixed column
-//         let fixed = meta.fixed_column();
-//         meta.enable_equality(fixed);
+                Ok(constants)
+            },
+        )?)
+    }
 
-//         // numeric config
-//         let mut numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
-//         let binding = numeric_config.used_numerics.clone();
-//         let iter = binding.iter();
-//         for numeric in iter {
-//             // numeric_config = match numeric {
-//             //     NumericType::Dot => DotChip::<F>::configure(meta, numeric_config),
-//             // };
-//         }
+    pub fn forward(&self) -> Tensor {
+        let mut tensor_map = self.graph.tensor_map.clone();
 
-//         // return
-//         ModelConfig {
-//             numeric_config,
-//             public,
-//             _marker: PhantomData,
-//         }
-//     }
+        for node in self.graph.nodes.iter() {
+            match node.op_type.as_str() {
+                "Gemm" => {
+                    let layer: FullyConnectedLayer<F> = layers::fully_connected::FullyConnectedLayer::construct(
+                        LayerConfig::default(),
+                    );
+                    let output = layer.forward(
+                        node.inputs
+                            .iter()
+                            .map(|x| tensor_map.get(x).unwrap().clone())
+                            .collect::<Vec<Tensor>>(),
+                    ).unwrap();
+                    for op in node.outputs.iter() {
+                        tensor_map.insert(op.clone(), output.clone());
+                    }
+                }
+                _ => panic!("Layer type not supported"),
+            }
+        }
 
-//     fn synthesize(
-//         &self,
-//         config: Self::Config,
-//         mut layouter: impl Layouter<F>,
-//     ) -> Result<(), ErrorFront> {
-//         // assign tensors
-//         // self.assign_tensors(
-//         //     layouter.namespace(|| "assign_tensors"),
-//         //     &config.numeric_config.columns,
-//         //     &self
-//         //         .layers
-//         //         .iter()
-//         //         .map(|layer| layer.field_weights.clone())
-//         //         .collect::<Vec<_>>(),
-//         // )
-//         // .unwrap();
-//         Ok(())
-//     }
-// }
+        tensor_map.get("output").unwrap().clone()
+    }
+}
+
+impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
+    type Config = ModelConfig<F>;
+    type FloorPlanner = SimpleFloorPlanner;
+
+    fn without_witnesses(&self) -> Self {
+        todo!()
+    }
+
+    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+        // Get numeric config from global state
+        let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
+
+        // Create columns & constants
+        let columns = (0..numeric_config.num_cols)
+            .map(|_| meta.advice_column())
+            .collect::<Vec<_>>();
+        for col in columns.iter() {
+            meta.enable_equality(*col);
+        }
+        let constants = vec![meta.fixed_column()];
+        for cst in constants.iter() {
+            meta.enable_equality(*cst);
+        }
+        // Update numeric config
+        let mut numeric_config = NumericConfig {
+            columns,
+            constants,
+            ..numeric_config
+        };
+
+        // numeric config
+        let binding = numeric_config.used_numerics.clone();
+        let iter = binding.iter();
+        for numeric in iter {
+            numeric_config = match numeric {
+                NumericType::Dot => DotChip::<F>::configure(meta, numeric_config),
+                NumericType::Accumulator => AccumulatorChip::<F>::configure(meta, numeric_config),
+            };
+        }
+
+        // Create public column
+        let public = meta.instance_column();
+        meta.enable_equality(public);
+
+        ModelConfig {
+            numeric_config: Rc::new(numeric_config),
+            public,
+            _marker: PhantomData,
+        }
+    }
+
+    fn synthesize(
+        &self,
+        config: Self::Config,
+        mut layouter: impl Layouter<F>,
+    ) -> Result<(), ErrorFront> {
+        let mut assigned_tensor_map = self
+            .assign_tensor_map(
+                layouter.namespace(|| "assign_tensor_map"),
+                &config.numeric_config.columns,
+                &self.field_tensor_map,
+            )
+            .unwrap();
+
+        let constants = self
+            .assign_constants(
+                layouter.namespace(|| "assign_constants"),
+                config.numeric_config.clone(),
+            )
+            .unwrap();
+
+        for op in self.graph.nodes.iter() {
+            let layer_type = match_layer_name_to_layer_type(op.op_type.clone());
+            let layer = match layer_type {
+                LayerType::FullyConnected => FullyConnectedChip {
+                    config: LayerConfig::default(),
+                    numeric_config: config.numeric_config.clone(),
+                    _marker: PhantomData,
+                },
+                _ => panic!("Layer type not supported"),
+            };
+            //
+            let inputs = op
+                .inputs
+                .iter()
+                .map(|x| assigned_tensor_map.get(x).unwrap().view())
+                .collect();
+
+            let output = layer
+                .forward(
+                    layouter.namespace(|| op.op_type.clone()),
+                    &inputs,
+                    &constants,
+                    &op.attributes,
+                )
+                .unwrap();
+            for (op, output) in op.outputs.iter().zip(output.into_iter()) {
+                assigned_tensor_map.insert(op.clone(), output);
+            }
+        }
+        Ok(())
+    }
+}

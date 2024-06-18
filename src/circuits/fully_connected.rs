@@ -43,7 +43,7 @@ impl<F: PrimeField> FullyConnectedCircuit<F> {
             || "assign_tensors",
             |mut region| {
                 let mut cell_idx = 0;
-                Ok(Array::from_shape_vec(
+                match Array::from_shape_vec(
                     IxDyn(tensor.shape()),
                     tensor
                         .iter()
@@ -59,8 +59,13 @@ impl<F: PrimeField> FullyConnectedCircuit<F> {
                             )?))
                         })
                         .collect::<Result<Vec<_>, ErrorFront>>()?,
-                )
-                .unwrap())
+                ) {
+                    Ok(x) => Ok(x),
+                    Err(e) => panic!(
+                        "Error occurs at FullyConnectedCircuit.assign_tensor: {:?}",
+                        e
+                    ),
+                }
             },
         )?)
     }

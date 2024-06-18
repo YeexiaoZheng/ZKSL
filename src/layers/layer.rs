@@ -1,3 +1,5 @@
+use std::{collections::HashMap, hash::Hash};
+
 use halo2_proofs::{
     circuit::Layouter,
     halo2curves::ff::PrimeField,
@@ -6,7 +8,7 @@ use ndarray::{Array, IxDyn, ShapeError};
 
 use crate::{
     model::FormatLayer, numerics::numeric::NumericType,
-    utils::{helpers::{AssignedTensor, AssignedTensorRef, Tensor}, matcher::match_layer_name_to_layer_type},
+    utils::{helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor}, matcher::match_layer_name_to_layer_type},
 };
 
 #[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq)]
@@ -48,7 +50,7 @@ impl<F: PrimeField> LayerConfig<F> {
 
 pub trait ConfigLayer<F: PrimeField> {
     fn config(&self) -> &LayerConfig<F>;
-    fn forward(&self, input: Tensor) -> Result<Tensor, ShapeError>;
+    fn forward(&self, inputs: Vec<Tensor>) -> Result<Tensor, ShapeError>;
 }
 
 pub trait Layer<F: PrimeField> {
@@ -57,8 +59,10 @@ pub trait Layer<F: PrimeField> {
     fn forward(
         &self,
         layouter: impl Layouter<F>,
-        input: AssignedTensorRef<F>,
-    ) -> Result<AssignedTensor<F>, ShapeError>;
+        inputs: &Vec<AssignedTensorRef<F>>,
+        constants: &HashMap<i64, CellRc<F>>,
+        attributes: &HashMap<String, f64>
+    ) -> Result<Vec<AssignedTensor<F>>, ShapeError>;
 }
 
 pub trait NumericConsumer {

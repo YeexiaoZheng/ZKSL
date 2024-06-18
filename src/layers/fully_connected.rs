@@ -1,11 +1,14 @@
-use std::marker::PhantomData;
+use std::{collections::HashMap, marker::PhantomData, rc::Rc};
 
 use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
-use ndarray::ShapeError;
+use ndarray::{s, Array, IxDyn, ShapeError};
 
 use crate::{
-    numerics::numeric::{Numeric, NumericConfig, NumericType},
-    utils::helpers::{AssignedTensor, AssignedTensorRef, Tensor},
+    numerics::{
+        dot::DotChip,
+        numeric::{Numeric, NumericConfig, NumericType},
+    },
+    utils::helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
 };
 
 use super::layer::{ConfigLayer, Layer, LayerConfig, NumericConsumer};
@@ -26,16 +29,15 @@ impl<F: PrimeField> ConfigLayer<F> for FullyConnectedLayer<F> {
         &self.config
     }
 
-    fn forward(&self, input: Tensor) -> Result<Tensor, ShapeError> {
-        assert_eq!(input.ndim(), 2);
-        assert_eq!(input.ndim(), self.config.input_shape.len());
-        assert_eq!(self.config.input_shape[1], self.config.weight_shape[0]);
-        assert_eq!(self.config.weight_shape[1], self.config.output_shape[0]);
+    fn forward(&self, inputs: Vec<Tensor>) -> Result<Tensor, ShapeError> {
+        let input = &inputs[0];
+        let weight = &inputs[1];
+        let input_shape = (input.shape()[0], input.shape()[1]);
+        let weight_shape = (weight.shape()[0], weight.shape()[1]);
+        assert_eq!(input_shape.1, weight_shape.0);
 
-        let input_shape = (self.config.input_shape[0], self.config.input_shape[1]);
-        let input = input.into_shape(input_shape)?;
-        let weight_shape = (self.config.weight_shape[0], self.config.weight_shape[1]);
-        let weight = self.config.o_weight.clone().into_shape(weight_shape)?;
+        let input = input.clone().into_shape(input_shape)?;
+        let weight = weight.clone().into_shape(weight_shape)?;
 
         Ok(input.dot(&weight).into_dyn())
     }
@@ -44,28 +46,84 @@ impl<F: PrimeField> ConfigLayer<F> for FullyConnectedLayer<F> {
 #[derive(Clone, Debug, Default)]
 pub struct FullyConnectedChip<F: PrimeField> {
     pub config: LayerConfig<F>,
+    pub numeric_config: Rc<NumericConfig>,
     pub _marker: PhantomData<F>,
+}
+
+impl<F: PrimeField> FullyConnectedChip<F> {
+    fn construct(config: LayerConfig<F>, numeric_config: Rc<NumericConfig>) -> Self {
+        Self {
+            config,
+            numeric_config,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<F: PrimeField> Layer<F> for FullyConnectedChip<F> {
     fn _forward(&self, input: Tensor) -> Result<Tensor, ShapeError> {
-        Ok(FullyConnectedLayer::construct(self.config.clone()).forward(input)?)
+        Ok(FullyConnectedLayer::construct(self.config.clone()).forward(vec![input])?)
     }
 
     fn forward(
         &self,
         mut layouter: impl Layouter<F>,
-        input: AssignedTensorRef<F>,
-    ) -> Result<AssignedTensor<F>, ShapeError> {
-        let weight = self.config.f_weight.clone();
-        todo!()
+        inputs: &Vec<AssignedTensorRef<F>>,
+        constants: &HashMap<i64, CellRc<F>>,
+        _attributes: &HashMap<String, f64>,
+    ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
+        // Check input shape
+        let input = inputs[0].clone();
+        let weight = inputs[1].clone();
+        let input_shape = input.shape();
+        let weight_shape = weight.shape();
+        assert_eq!(input_shape.len(), 2);
+        assert_eq!(input_shape.len(), weight_shape.len());
+        assert_eq!(input_shape[1], weight_shape[0]);
+
+        // Get constants
+        let zero = constants.get(&0).unwrap().clone();
+        let constants = vec![zero.as_ref()];
+
+        // Initialize dot chip
+        let dot_chip = DotChip::construct(self.numeric_config.clone());
+
+        // Forward pass
+        let mut outputs = vec![];
+        for i in 0..input_shape[0] {
+            for j in 0..weight_shape[1] {
+                let input = input
+                    .slice(s![i, ..])
+                    .into_iter()
+                    .map(|x| x.as_ref())
+                    .collect::<Vec<_>>();
+                let weight = weight
+                    .slice(s![.., j])
+                    .into_iter()
+                    .map(|x| x.as_ref())
+                    .collect::<Vec<_>>();
+                outputs.extend(
+                    match dot_chip.forward(
+                        layouter.namespace(|| format!("dot_{}_{}", i, j)),
+                        &vec![input, weight],
+                        &constants,
+                    ) {
+                        Ok(output) => output,
+                        Err(e) => panic!("Error in FullyConnectedChip.dot_chip: {:?}", e),
+                    },
+                );
+            }
+        }
+
+        Ok(vec![Array::from_shape_vec(
+            IxDyn(&[input_shape[0], weight_shape[1]]),
+            outputs.into_iter().map(|x| Rc::new(x)).collect(),
+        )?])
     }
 }
 
 impl<F: PrimeField> NumericConsumer for FullyConnectedChip<F> {
     fn used_numerics(&self) -> Vec<NumericType> {
-        let mut numerics = vec![];
-        numerics.push(NumericType::Dot);
-        numerics
+        vec![NumericType::Dot, NumericType::Accumulator]
     }
 }

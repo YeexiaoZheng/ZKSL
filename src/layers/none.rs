@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+
 use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
 use ndarray::ShapeError;
 
-use crate::{numerics::numeric::NumericType, utils::helpers::{AssignedTensor, AssignedTensorRef, Tensor}};
+use crate::{numerics::numeric::NumericType, utils::helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor}};
 
 use super::layer::{ConfigLayer, Layer, LayerConfig, NumericConsumer};
 
@@ -21,8 +23,8 @@ impl<F: PrimeField> ConfigLayer<F> for NoneLayer<F> {
         &self.config
     }
 
-    fn forward(&self, input: Tensor) -> Result<Tensor, ShapeError> {
-        Ok(input)
+    fn forward(&self, input: Vec<Tensor>) -> Result<Tensor, ShapeError> {
+        Ok(input[0].clone())
     }
 }
 
@@ -36,9 +38,11 @@ impl<F: PrimeField> Layer<F> for NoneChip {
     
     fn forward(
         &self,
-        layouter: impl Layouter<F>,
-        input: AssignedTensorRef<F>,
-    ) -> Result<AssignedTensor<F>, ShapeError> {
+        _layouter: impl Layouter<F>,
+        _inputs: &Vec<AssignedTensorRef<F>>,
+        _constants: &HashMap<i64, CellRc<F>>,
+        _attributes: &HashMap<String, f64>
+    ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         todo!()
     }
 }

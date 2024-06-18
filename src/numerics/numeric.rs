@@ -6,7 +6,7 @@ use std::{
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region},
     halo2curves::group::ff::PrimeField,
-    plonk::{Advice, Column, Error, Fixed, Instance, Selector, TableColumn},
+    plonk::{Advice, Column, Error, Fixed, Selector, TableColumn},
 };
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
