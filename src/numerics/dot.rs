@@ -9,9 +9,9 @@ use halo2_proofs::{
 
 use crate::numerics::accumulator::AccumulatorChip;
 
-use super::numeric::{Numeric, NumericType, _NumericConfig};
+use super::numeric::{Numeric, NumericType, NumericConfig};
 
-type DotConfig = _NumericConfig;
+type DotConfig = NumericConfig;
 
 pub struct DotChip<F: PrimeField> {
     pub config: Rc<DotConfig>,
@@ -19,7 +19,7 @@ pub struct DotChip<F: PrimeField> {
 }
 
 impl<F: PrimeField> DotChip<F> {
-    pub fn construct(config: Rc<DotConfig>) -> Self {
+    pub fn construct(config: Rc<NumericConfig>) -> Self {
         Self {
             config,
             _marker: PhantomData,
@@ -28,8 +28,8 @@ impl<F: PrimeField> DotChip<F> {
 
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        numeric_config: _NumericConfig,
-    ) -> _NumericConfig {
+        numeric_config: NumericConfig,
+    ) -> DotConfig {
         let selector = meta.selector();
         let columns = &numeric_config.columns;
 
@@ -68,12 +68,12 @@ impl<F: PrimeField> DotChip<F> {
         }
     }
 
-    pub fn get_input_columns(config: &_NumericConfig) -> Vec<Column<Advice>> {
+    pub fn get_input_columns(config: &DotConfig) -> Vec<Column<Advice>> {
         let num_inputs = (config.columns.len() - 1) / 2;
         config.columns[0..num_inputs].to_vec()
     }
 
-    pub fn get_weight_columns(config: &_NumericConfig) -> Vec<Column<Advice>> {
+    pub fn get_weight_columns(config: &DotConfig) -> Vec<Column<Advice>> {
         let num_inputs = (config.columns.len() - 1) / 2;
         config.columns[num_inputs..config.columns.len() - 1].to_vec()
     }

@@ -1,11 +1,12 @@
-use std::rc::Rc;
-
-use halo2_proofs::{circuit::AssignedCell, halo2curves::ff::PrimeField};
-use ndarray::{Array, ArrayView, IxDyn, ShapeError};
+use halo2_proofs::{
+    circuit::Layouter,
+    halo2curves::ff::PrimeField,
+};
+use ndarray::{Array, IxDyn, ShapeError};
 
 use crate::{
     model::FormatLayer, numerics::numeric::NumericType,
-    utils::matcher::match_layer_name_to_layer_type,
+    utils::{helpers::{AssignedTensor, AssignedTensorRef, Tensor}, matcher::match_layer_name_to_layer_type},
 };
 
 #[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq)]
@@ -15,12 +16,6 @@ pub enum LayerType {
     #[default]
     None,
 }
-
-pub type Tensor = Array<i64, IxDyn>;
-pub type FieldTensor<F> = Array<F, IxDyn>;
-pub type CellRc<F> = Rc<AssignedCell<F, F>>;
-pub type AssignedTensor<F> = Array<CellRc<F>, IxDyn>;
-pub type AssignedTensorRef<'a, F> = ArrayView<'a, AssignedCell<F, F>, IxDyn>;
 
 #[derive(Clone, Debug, Default)]
 pub struct LayerConfig<F: PrimeField> {
@@ -59,7 +54,11 @@ pub trait ConfigLayer<F: PrimeField> {
 pub trait Layer<F: PrimeField> {
     fn _forward(&self, input: Tensor) -> Result<Tensor, ShapeError>;
 
-    fn forward(&self);
+    fn forward(
+        &self,
+        layouter: impl Layouter<F>,
+        input: AssignedTensorRef<F>,
+    ) -> Result<AssignedTensor<F>, ShapeError>;
 }
 
 pub trait NumericConsumer {

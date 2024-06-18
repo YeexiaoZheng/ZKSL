@@ -7,9 +7,9 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use super::numeric::{Numeric, NumericType, _NumericConfig};
+use super::numeric::{Numeric, NumericType, NumericConfig};
 
-type AccumulatorConfig = _NumericConfig;
+type AccumulatorConfig = NumericConfig;
 
 pub struct AccumulatorChip<F: PrimeField> {
     pub config: Rc<AccumulatorConfig>,
@@ -17,7 +17,7 @@ pub struct AccumulatorChip<F: PrimeField> {
 }
 
 impl<F: PrimeField> AccumulatorChip<F> {
-    pub fn construct(config: Rc<_NumericConfig>) -> Self {
+    pub fn construct(config: Rc<NumericConfig>) -> Self {
         Self {
             config,
             _marker: PhantomData,
@@ -26,7 +26,7 @@ impl<F: PrimeField> AccumulatorChip<F> {
 
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
-        numeric_config: _NumericConfig,
+        numeric_config: NumericConfig,
     ) -> AccumulatorConfig {
         let selector = meta.selector();
         let columns = numeric_config.columns;

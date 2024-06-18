@@ -1,9 +1,9 @@
-use halo2_proofs::halo2curves::ff::PrimeField;
+use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
 use ndarray::ShapeError;
 
-use crate::numerics::numeric::NumericType;
+use crate::{numerics::numeric::NumericType, utils::helpers::{AssignedTensor, AssignedTensorRef, Tensor}};
 
-use super::layer::{ConfigLayer, Layer, LayerConfig, NumericConsumer, Tensor};
+use super::layer::{ConfigLayer, Layer, LayerConfig, NumericConsumer};
 
 #[derive(Clone, Debug, Default)]
 pub struct NoneLayer<F: PrimeField> {
@@ -33,8 +33,12 @@ impl<F: PrimeField> Layer<F> for NoneChip {
     fn _forward(&self, _input: Tensor) -> Result<Tensor, ShapeError> {
         todo!()
     }
-
-    fn forward(&self) {
+    
+    fn forward(
+        &self,
+        layouter: impl Layouter<F>,
+        input: AssignedTensorRef<F>,
+    ) -> Result<AssignedTensor<F>, ShapeError> {
         todo!()
     }
 }

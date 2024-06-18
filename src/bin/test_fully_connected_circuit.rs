@@ -1,6 +1,9 @@
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use ndarray::{Array, Dim, IxDyn};
-use zkml::layers::fully_connected::FullyConnectedCircuit;
+use zkml::{
+    circuits::fully_connected::FullyConnectedCircuit, numerics::numeric::NumericConfig,
+    utils::helpers::NUMERIC_CONFIG,
+};
 
 fn to_field(x: i64) -> Fr {
     let bias = 1 << 31;
@@ -46,6 +49,20 @@ fn main() {
     let output = f_output.clone().into_iter().collect::<Vec<_>>();
 
     let circuit = FullyConnectedCircuit::construct(f_input, f_hidden_layer);
+
+    let k = 10;
+    let scale_factor = 1 << 9;
+
+    let nconfig = &NUMERIC_CONFIG;
+    let cloned = nconfig.lock().unwrap().clone();
+    *nconfig.lock().unwrap() = NumericConfig {
+        k,
+        scale_factor,
+        num_rows: (1 << k) - 10 + 1,
+        num_cols: 10,
+        use_selectors: true,
+        ..cloned
+    };
 
     let prover = MockProver::run(10, &circuit, vec![output]).unwrap();
 

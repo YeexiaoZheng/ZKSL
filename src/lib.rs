@@ -5,3 +5,4 @@ pub mod utils;
 
 pub mod numerics;
 pub mod layers;
+pub mod circuits;

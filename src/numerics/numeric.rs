@@ -16,7 +16,7 @@ pub enum NumericType {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct NumericConfig {
+pub struct _NumericConfig {
     pub used_numerics: Arc<BTreeSet<NumericType>>,
     pub columns: Vec<Column<Advice>>,
     pub fixed_columns: Vec<Column<Fixed>>,
@@ -34,11 +34,11 @@ pub struct NumericConfig {
     pub num_bits_per_elem: i64,
 }
 
-#[derive(Clone, Debug)]
-pub struct _NumericConfig {
+#[derive(Clone, Debug, Default)]
+pub struct NumericConfig {
     pub used_numerics: Arc<BTreeSet<NumericType>>,
 
-    //
+    // params
     pub k: usize,
     pub scale_factor: u64,
     pub num_rows: usize,
@@ -47,11 +47,11 @@ pub struct _NumericConfig {
     // columns
     pub columns: Vec<Column<Advice>>,
     pub constants: Vec<Column<Fixed>>,
-    pub public: Column<Instance>,
 
     // selectors
     pub use_selectors: bool,
     pub selectors: HashMap<NumericType, Vec<Selector>>,
+
     // lookup tables
     // pub tables: HashMap<NumericType, Vec<TableColumn>>,
     // pub maps: HashMap<NumericType, Vec<HashMap<i64, i64>>>,
