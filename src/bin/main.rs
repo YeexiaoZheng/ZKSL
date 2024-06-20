@@ -36,7 +36,7 @@ fn main() {
 
     // Run the circuit
     let output = circuit.forward().unwrap();
-    println!("{:?}", output);
+    println!("output: {:?}", output);
 
     // Verify the circuit
     let public = output.iter().map(|x| to_field(*x)).collect::<Vec<_>>();

@@ -9,7 +9,7 @@ use halo2_proofs::{
     halo2curves::ff::PrimeField,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, ErrorFront, Instance},
 };
-use ndarray::{Array, Dim, IxDyn, ShapeError};
+use ndarray::{Array, IxDyn, ShapeError};
 
 use crate::{
     graph::Graph,
@@ -23,16 +23,6 @@ use crate::{
         matcher::{match_configure, match_consumer, match_op_type, match_operation},
     },
 };
-
-#[derive(Clone, Debug, Default)]
-pub struct FormatLayer<F: PrimeField> {
-    pub layer_name: String,
-    pub input_shape: Vec<usize>,
-    pub output_shape: Vec<usize>,
-    pub weight_shape: Vec<usize>,
-    pub original_weights: Array<i64, Dim<[usize; 2]>>,
-    pub field_weights: Array<F, IxDyn>,
-}
 
 #[derive(Clone, Debug)]
 pub struct ModelCircuit<F: PrimeField> {
@@ -201,6 +191,7 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
         for cst in constants.iter() {
             meta.enable_equality(*cst);
         }
+
         // Update numeric config
         let mut numeric_config = NumericConfig {
             columns,
@@ -231,6 +222,7 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), ErrorFront> {
+        // Assign tensors
         let mut assigned_tensor_map = self
             .assign_tensor_map(
                 layouter.namespace(|| "assign_tensor_map"),
@@ -239,6 +231,7 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
             )
             .unwrap();
 
+        // Assign constants
         let constants = self
             .assign_constants(
                 layouter.namespace(|| "assign_constants"),
@@ -246,23 +239,24 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
             )
             .unwrap();
 
+        // Run the circuit by each operation chips
         for op in self.graph.nodes.iter() {
-            let layer_type = match_op_type(op.op_type.clone());
-            let layer = match layer_type {
+            // Match operation chip
+            let operation = match match_op_type(op.op_type.clone()) {
                 OPType::GEMM => GemmChip {
                     numeric_config: config.numeric_config.clone(),
                     _marker: PhantomData,
                 },
                 _ => panic!("Layer type not supported"),
             };
-            //
+            // Get inputs
             let inputs = op
                 .inputs
                 .iter()
                 .map(|x| assigned_tensor_map.get(x).unwrap().view())
                 .collect();
-
-            let output = layer
+            // Run the operation
+            let outputs = operation
                 .forward(
                     layouter.namespace(|| op.op_type.clone()),
                     &inputs,
@@ -270,13 +264,14 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
                     &op.attributes,
                 )
                 .unwrap();
-            for (op, output) in op.outputs.iter().zip(output.into_iter()) {
+            // Insert the output to the assigned tensor map
+            for (op, output) in op.outputs.iter().zip(outputs.into_iter()) {
                 assigned_tensor_map.insert(op.clone(), output);
             }
         }
 
+        // Constrain the output
         let output = assigned_tensor_map.get("output").unwrap().clone();
-
         for (i, cell) in output.iter().enumerate() {
             layouter
                 .constrain_instance(cell.as_ref().cell(), config.public, i)
