@@ -1,8 +1,8 @@
 // special trait mod
-pub mod layer;
+pub mod operation;
 
 // layer mods
-pub mod fully_connected;
+pub mod gemm;
 
 // default none layer
 pub mod none;

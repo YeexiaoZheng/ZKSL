@@ -11,25 +11,27 @@ use crate::{
     utils::helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
 };
 
-use super::layer::{ConfigLayer, Layer, LayerConfig, NumericConsumer};
+use super::operation::{NumericConsumer, Operation};
 
 #[derive(Clone, Debug, Default)]
-pub struct FullyConnectedLayer<F: PrimeField> {
-    pub config: LayerConfig<F>,
+pub struct GemmChip<F: PrimeField> {
+    pub numeric_config: Rc<NumericConfig>,
+    pub _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField> FullyConnectedLayer<F> {
-    pub fn construct(config: LayerConfig<F>) -> Self {
-        Self { config }
-    }
-}
-
-impl<F: PrimeField> ConfigLayer<F> for FullyConnectedLayer<F> {
-    fn config(&self) -> &LayerConfig<F> {
-        &self.config
+impl<F: PrimeField> GemmChip<F> {
+    pub fn construct(numeric_config: Rc<NumericConfig>) -> Self {
+        Self {
+            numeric_config,
+            _marker: PhantomData,
+        }
     }
 
-    fn forward(&self, inputs: Vec<Tensor>) -> Result<Tensor, ShapeError> {
+    // This function is used for non-circuit forward
+    pub fn forward(
+        inputs: &Vec<Tensor>,
+        _attributes: &HashMap<String, f64>,
+    ) -> Result<Vec<Tensor>, ShapeError> {
         let input = &inputs[0];
         let weight = &inputs[1];
         let input_shape = (input.shape()[0], input.shape()[1]);
@@ -39,32 +41,11 @@ impl<F: PrimeField> ConfigLayer<F> for FullyConnectedLayer<F> {
         let input = input.clone().into_shape(input_shape)?;
         let weight = weight.clone().into_shape(weight_shape)?;
 
-        Ok(input.dot(&weight).into_dyn())
+        Ok(vec![input.dot(&weight).into_dyn()])
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct FullyConnectedChip<F: PrimeField> {
-    pub config: LayerConfig<F>,
-    pub numeric_config: Rc<NumericConfig>,
-    pub _marker: PhantomData<F>,
-}
-
-impl<F: PrimeField> FullyConnectedChip<F> {
-    fn construct(config: LayerConfig<F>, numeric_config: Rc<NumericConfig>) -> Self {
-        Self {
-            config,
-            numeric_config,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<F: PrimeField> Layer<F> for FullyConnectedChip<F> {
-    fn _forward(&self, input: Tensor) -> Result<Tensor, ShapeError> {
-        Ok(FullyConnectedLayer::construct(self.config.clone()).forward(vec![input])?)
-    }
-
+impl<F: PrimeField> Operation<F> for GemmChip<F> {
     fn forward(
         &self,
         mut layouter: impl Layouter<F>,
@@ -109,7 +90,7 @@ impl<F: PrimeField> Layer<F> for FullyConnectedChip<F> {
                         &constants,
                     ) {
                         Ok(output) => output,
-                        Err(e) => panic!("Error in FullyConnectedChip.dot_chip: {:?}", e),
+                        Err(e) => panic!("Error in GemmChip.dot_chip: {:?}", e),
                     },
                 );
             }
@@ -122,7 +103,7 @@ impl<F: PrimeField> Layer<F> for FullyConnectedChip<F> {
     }
 }
 
-impl<F: PrimeField> NumericConsumer for FullyConnectedChip<F> {
+impl<F: PrimeField> NumericConsumer for GemmChip<F> {
     fn used_numerics(&self) -> Vec<NumericType> {
         vec![NumericType::Dot, NumericType::Accumulator]
     }

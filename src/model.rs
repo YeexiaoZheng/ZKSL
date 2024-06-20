@@ -1,34 +1,26 @@
 use std::{
     collections::{BTreeSet, HashMap},
-    hash::Hash,
     marker::PhantomData,
     rc::Rc,
-    sync::Mutex,
 };
 
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    halo2curves::ff::{FromUniformBytes, PrimeField},
+    halo2curves::ff::PrimeField,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, ErrorFront, Instance},
-    poly::ipa::strategy::Accumulator,
 };
-use ndarray::{Array, Dim, IxDyn};
+use ndarray::{Array, Dim, IxDyn, ShapeError};
 
 use crate::{
-    graph::{Graph, Node},
-    layers::{
-        self,
-        fully_connected::{FullyConnectedChip, FullyConnectedLayer},
-        layer::{self, ConfigLayer, Layer, LayerConfig, LayerType}, // layer::{AssignedTensor, ConfigLayer, FieldTensor, Layer, LayerConfig, LayerType},
-    },
-    numerics::{
-        accumulator::AccumulatorChip,
-        dot::DotChip,
-        numeric::{NumericConfig, NumericType},
+    graph::Graph,
+    numerics::numeric::{NumericConfig, NumericType},
+    operations::{
+        gemm::GemmChip,
+        operation::{OPType, Operation}, // layer::{AssignedTensor, ConfigLayer, FieldTensor, Layer, LayerConfig, LayerType},
     },
     utils::{
         helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
-        matcher::{match_layer_name_to_layer_type, match_layer_type_to_consumer},
+        matcher::{match_configure, match_consumer, match_op_type, match_operation},
     },
 };
 
@@ -47,8 +39,6 @@ pub struct ModelCircuit<F: PrimeField> {
     pub graph: Graph,
     pub used_numerics: BTreeSet<NumericType>,
     pub field_tensor_map: HashMap<String, FieldTensor<F>>,
-    pub layer_chips: Vec<LayerType>,
-    pub layer_configs: Vec<LayerConfig<F>>,
 }
 
 #[derive(Clone, Debug)]
@@ -61,19 +51,10 @@ pub struct ModelConfig<F: PrimeField> {
 impl<F: PrimeField> ModelCircuit<F> {
     pub fn construct(graph: Graph) -> Self {
         let layers = &graph.nodes;
-        let mut layer_configs = vec![];
-        let mut layer_chips = vec![];
         let mut used_numerics = BTreeSet::new();
         for layer in layers.iter() {
-            let layer_type = match_layer_name_to_layer_type(layer.op_type.clone());
-            // let layer_config = LayerConfig::<F>::construct(layer.clone());
-            // layer_configs.push(layer_config.clone());
-            layer_chips.push(layer_type);
-            used_numerics.extend(
-                match_layer_type_to_consumer::<F>(layer_type)
-                    .used_numerics()
-                    .iter(),
-            )
+            let op_type = match_op_type(layer.op_type.clone());
+            used_numerics.extend(match_consumer::<F>(op_type).used_numerics().iter())
         }
 
         let field_tensor_map = graph
@@ -95,8 +76,6 @@ impl<F: PrimeField> ModelCircuit<F> {
             graph,
             used_numerics,
             field_tensor_map,
-            layer_chips,
-            layer_configs,
         }
     }
 
@@ -107,7 +86,7 @@ impl<F: PrimeField> ModelCircuit<F> {
         tensors_map: &HashMap<String, FieldTensor<F>>,
     ) -> Result<HashMap<String, AssignedTensor<F>>, Error> {
         Ok(layouter.assign_region(
-            || "assign_tensors_map",
+            || "assign_tensor_map",
             |mut region| {
                 let mut cell_idx = 0;
                 let assigned_tensors = tensors_map
@@ -177,30 +156,25 @@ impl<F: PrimeField> ModelCircuit<F> {
         )?)
     }
 
-    pub fn forward(&self) -> Tensor {
+    pub fn forward(&self) -> Result<Tensor, ShapeError> {
         let mut tensor_map = self.graph.tensor_map.clone();
 
         for node in self.graph.nodes.iter() {
-            match node.op_type.as_str() {
-                "Gemm" => {
-                    let layer: FullyConnectedLayer<F> = layers::fully_connected::FullyConnectedLayer::construct(
-                        LayerConfig::default(),
-                    );
-                    let output = layer.forward(
-                        node.inputs
-                            .iter()
-                            .map(|x| tensor_map.get(x).unwrap().clone())
-                            .collect::<Vec<Tensor>>(),
-                    ).unwrap();
-                    for op in node.outputs.iter() {
-                        tensor_map.insert(op.clone(), output.clone());
-                    }
-                }
-                _ => panic!("Layer type not supported"),
+            let operation = match_operation::<F>(match_op_type(node.op_type.clone()));
+            let outputs = operation(
+                &node
+                    .inputs
+                    .iter()
+                    .map(|x| tensor_map.get(x).unwrap().clone())
+                    .collect::<Vec<Tensor>>(),
+                &node.attributes,
+            )?;
+            for (op, output) in node.outputs.iter().zip(outputs.into_iter()) {
+                tensor_map.insert(op.clone(), output);
             }
         }
 
-        tensor_map.get("output").unwrap().clone()
+        Ok(tensor_map.get("output").unwrap().clone())
     }
 }
 
@@ -234,14 +208,11 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
             ..numeric_config
         };
 
-        // numeric config
-        let binding = numeric_config.used_numerics.clone();
-        let iter = binding.iter();
-        for numeric in iter {
-            numeric_config = match numeric {
-                NumericType::Dot => DotChip::<F>::configure(meta, numeric_config),
-                NumericType::Accumulator => AccumulatorChip::<F>::configure(meta, numeric_config),
-            };
+        // Configure each numerics
+        let iter = <BTreeSet<NumericType> as Clone>::clone(&numeric_config.used_numerics.clone())
+            .into_iter();
+        for numeric_type in iter {
+            numeric_config = match_configure(numeric_type)(meta, numeric_config);
         }
 
         // Create public column
@@ -276,10 +247,9 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
             .unwrap();
 
         for op in self.graph.nodes.iter() {
-            let layer_type = match_layer_name_to_layer_type(op.op_type.clone());
+            let layer_type = match_op_type(op.op_type.clone());
             let layer = match layer_type {
-                LayerType::FullyConnected => FullyConnectedChip {
-                    config: LayerConfig::default(),
+                OPType::GEMM => GemmChip {
                     numeric_config: config.numeric_config.clone(),
                     _marker: PhantomData,
                 },
@@ -303,6 +273,14 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
             for (op, output) in op.outputs.iter().zip(output.into_iter()) {
                 assigned_tensor_map.insert(op.clone(), output);
             }
+        }
+
+        let output = assigned_tensor_map.get("output").unwrap().clone();
+
+        for (i, cell) in output.iter().enumerate() {
+            layouter
+                .constrain_instance(cell.as_ref().cell(), config.public, i)
+                .unwrap();
         }
         Ok(())
     }

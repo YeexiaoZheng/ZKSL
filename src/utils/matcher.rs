@@ -1,26 +1,56 @@
-use std::marker::PhantomData;
+use std::collections::HashMap;
 
-use halo2_proofs::halo2curves::ff::PrimeField;
+use halo2_proofs::{halo2curves::ff::PrimeField, plonk::ConstraintSystem};
+use ndarray::ShapeError;
 
-use crate::layers::{fully_connected::FullyConnectedChip, layer::{LayerConfig, LayerType, NumericConsumer}, none::NoneChip};
+use crate::{
+    numerics::{
+        accumulator::AccumulatorChip,
+        dot::DotChip,
+        numeric::{NumericConfig, NumericType},
+    },
+    operations::{
+        gemm::GemmChip,
+        none::NoneChip,
+        operation::{NumericConsumer, OPType},
+    },
+};
 
-pub fn match_layer_name_to_layer_type(layer_name: String) -> LayerType {
-    match layer_name.as_str() {
-        "FullyConnected" => LayerType::FullyConnected,
-        "Gemm" => LayerType::FullyConnected,
-        "ReLU" => LayerType::ReLU,
-        "None" => LayerType::None,
-        _ => LayerType::None,
+use super::helpers::Tensor;
+
+pub fn match_op_type(op_type: String) -> OPType {
+    match op_type.as_str() {
+        "Gemm" => OPType::GEMM,
+        "ReLU" => OPType::ReLU,
+        "None" => OPType::None,
+        _ => OPType::None,
     }
 }
 
-pub fn match_layer_type_to_consumer<F: PrimeField>(layer_type: LayerType) -> Box<dyn NumericConsumer> {
-    match layer_type {
-        LayerType::FullyConnected => Box::new(FullyConnectedChip {
-            config: LayerConfig::default(),
-            numeric_config: Default::default(),
-            _marker: PhantomData::<F>,
-        }) as Box<dyn NumericConsumer>,
-        _ => Box::new(NoneChip {}) as Box<dyn NumericConsumer>,
+pub fn match_operation<F: PrimeField>(
+    op_type: OPType,
+) -> fn(&Vec<Tensor>, &HashMap<String, f64>) -> Result<Vec<Tensor>, ShapeError> {
+    match op_type {
+        OPType::GEMM => GemmChip::<F>::forward,
+        OPType::ReLU => NoneChip::<F>::forward,
+        OPType::None => NoneChip::<F>::forward,
+    }
+}
+
+pub fn match_configure<F: PrimeField>(
+    numeric_type: NumericType,
+) -> fn(&mut ConstraintSystem<F>, NumericConfig) -> NumericConfig {
+    match numeric_type {
+        NumericType::Dot => DotChip::<F>::configure,
+        NumericType::Accumulator => AccumulatorChip::<F>::configure,
+    }
+}
+
+pub fn match_consumer<F: PrimeField>(op_type: OPType) -> Box<dyn NumericConsumer> {
+    match op_type {
+        OPType::GEMM => {
+            Box::new(GemmChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
+        }
+        _ => Box::new(NoneChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>,
     }
 }
