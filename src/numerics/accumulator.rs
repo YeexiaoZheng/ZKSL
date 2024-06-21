@@ -61,7 +61,7 @@ impl<F: PrimeField> AccumulatorChip<F> {
 
 impl<F: PrimeField> Numeric<F> for AccumulatorChip<F> {
     fn name(&self) -> String {
-        "".to_string()
+        "Accumulator".to_string()
     }
 
     fn num_cols_per_op(&self) -> usize {
@@ -72,7 +72,7 @@ impl<F: PrimeField> Numeric<F> for AccumulatorChip<F> {
         self.config.columns.len() - 1
     }
 
-    fn op_row_region(
+    fn compute_row(
         &self,
         region: &mut Region<F>,
         row_offset: usize,
@@ -131,7 +131,7 @@ impl<F: PrimeField> Numeric<F> for AccumulatorChip<F> {
             input.push(&zero);
         }
         // Accumulate the input to get initial outputs
-        let mut outputs = self.op_aligned_rows(
+        let mut outputs = self.compute_rows(
             layouter.namespace(|| "accumulator forward"),
             &vec![input],
             constants,
@@ -142,7 +142,7 @@ impl<F: PrimeField> Numeric<F> for AccumulatorChip<F> {
             while outputs.len() % cols_per_row != 0 {
                 outputs.push(zero.clone());
             }
-            outputs = self.op_aligned_rows(
+            outputs = self.compute_rows(
                 layouter.namespace(|| "accumulator forward"),
                 &vec![outputs.iter().collect::<Vec<_>>()],
                 constants,

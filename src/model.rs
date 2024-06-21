@@ -16,7 +16,8 @@ use crate::{
     numerics::numeric::{NumericConfig, NumericType},
     operations::{
         gemm::GemmChip,
-        operation::{OPType, Operation}, // layer::{AssignedTensor, ConfigLayer, FieldTensor, Layer, LayerConfig, LayerType},
+        none::NoneChip,
+        operation::{OPType, Operation},
     },
     utils::{
         helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
@@ -40,10 +41,9 @@ pub struct ModelConfig<F: PrimeField> {
 
 impl<F: PrimeField> ModelCircuit<F> {
     pub fn construct(graph: Graph) -> Self {
-        let layers = &graph.nodes;
         let mut used_numerics = BTreeSet::new();
-        for layer in layers.iter() {
-            let op_type = match_op_type(layer.op_type.clone());
+        for node in graph.nodes.iter() {
+            let op_type = match_op_type(node.op_type.clone());
             used_numerics.extend(match_consumer::<F>(op_type).used_numerics().iter())
         }
 
@@ -241,14 +241,6 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
 
         // Run the circuit by each operation chips
         for op in self.graph.nodes.iter() {
-            // Match operation chip
-            let operation = match match_op_type(op.op_type.clone()) {
-                OPType::GEMM => GemmChip {
-                    numeric_config: config.numeric_config.clone(),
-                    _marker: PhantomData,
-                },
-                _ => panic!("Layer type not supported"),
-            };
             // Get inputs
             let inputs = op
                 .inputs
@@ -256,14 +248,22 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
                 .map(|x| assigned_tensor_map.get(x).unwrap().view())
                 .collect();
             // Run the operation
-            let outputs = operation
-                .forward(
+            let outputs = match match_op_type(op.op_type.clone()) {
+                OPType::GEMM => GemmChip::<F>::construct(config.numeric_config.clone()).forward(
                     layouter.namespace(|| op.op_type.clone()),
                     &inputs,
                     &constants,
                     &op.attributes,
-                )
-                .unwrap();
+                ),
+                OPType::None => NoneChip::<F>::construct(config.numeric_config.clone()).forward(
+                    layouter.namespace(|| op.op_type.clone()),
+                    &inputs,
+                    &constants,
+                    &op.attributes,
+                ),
+                _ => panic!("Layer type not supported"),
+            }
+            .unwrap();
             // Insert the output to the assigned tensor map
             for (op, output) in op.outputs.iter().zip(outputs.into_iter()) {
                 assigned_tensor_map.insert(op.clone(), output);

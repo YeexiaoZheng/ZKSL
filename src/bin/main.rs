@@ -11,8 +11,6 @@ use zkml::{
     },
 };
 
-// use zkml::{graph::Graph, model::ModelCircuit, utils::loader::load_from_json};
-
 fn main() {
     // Load graph
     let graph = Graph::construct(load_from_json("src/utils/test.json"));

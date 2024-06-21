@@ -21,6 +21,14 @@ pub trait Operation<F: PrimeField> {
         constants: &HashMap<i64, CellRc<F>>,
         attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError>;
+
+    fn backward(
+        &self,
+        layouter: impl Layouter<F>,
+        inputs: &Vec<AssignedTensorRef<F>>,
+        constants: &HashMap<i64, CellRc<F>>,
+        attributes: &HashMap<String, f64>,
+    ) -> Result<Vec<AssignedTensor<F>>, ShapeError>;
 }
 
 pub trait NumericConsumer {

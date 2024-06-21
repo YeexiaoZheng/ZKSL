@@ -9,7 +9,7 @@ use halo2_proofs::{
 
 use crate::numerics::accumulator::AccumulatorChip;
 
-use super::numeric::{Numeric, NumericType, NumericConfig};
+use super::numeric::{Numeric, NumericConfig, NumericType};
 
 type DotConfig = NumericConfig;
 
@@ -26,10 +26,7 @@ impl<F: PrimeField> DotChip<F> {
         }
     }
 
-    pub fn configure(
-        meta: &mut ConstraintSystem<F>,
-        numeric_config: NumericConfig,
-    ) -> DotConfig {
+    pub fn configure(meta: &mut ConstraintSystem<F>, numeric_config: NumericConfig) -> DotConfig {
         let selector = meta.selector();
         let columns = &numeric_config.columns;
 
@@ -92,7 +89,7 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
         (self.config.columns.len() - 1) / 2
     }
 
-    fn op_row_region(
+    fn compute_row(
         &self,
         region: &mut Region<F>,
         row_offset: usize,
@@ -177,26 +174,10 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
         }
 
         // Assign input and weight columns
-        let outputs = layouter.assign_region(
-            || "dot rows",
-            |mut region| {
-                let mut outputs = vec![];
-                for i in 0..input.len() / cols_per_row {
-                    let res = self
-                        .op_row_region(
-                            &mut region,
-                            i,
-                            &vec![
-                                input[i * cols_per_row..(i + 1) * cols_per_row].to_vec(),
-                                weight[i * cols_per_row..(i + 1) * cols_per_row].to_vec(),
-                            ],
-                            constants,
-                        )
-                        .unwrap();
-                    outputs.push(res[0].clone());
-                }
-                Ok(outputs)
-            },
+        let outputs = self.compute_rows(
+            layouter.namespace(|| "dot rows"),
+            &vec![input, weight],
+            constants,
         )?;
 
         // Use accumulator to sum up all outputs

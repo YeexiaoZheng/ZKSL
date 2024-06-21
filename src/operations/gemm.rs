@@ -43,6 +43,22 @@ impl<F: PrimeField> GemmChip<F> {
 
         Ok(vec![input.dot(&weight).into_dyn()])
     }
+
+    pub fn backward(
+        inputs: &Vec<Tensor>,
+        _attributes: &HashMap<String, f64>,
+    ) -> Result<Vec<Tensor>, ShapeError> {
+        let input = &inputs[0];
+        let weight = &inputs[1];
+        let input_shape = (input.shape()[0], input.shape()[1]);
+        let weight_shape = (weight.shape()[0], weight.shape()[1]);
+        assert_eq!(input_shape.1, weight_shape.0);
+
+        let input = input.clone().into_shape(input_shape)?;
+        let weight = weight.clone().into_shape(weight_shape)?;
+
+        Ok(vec![input.dot(&weight).into_dyn()])
+    }
 }
 
 impl<F: PrimeField> Operation<F> for GemmChip<F> {
@@ -100,6 +116,16 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
             IxDyn(&[input_shape[0], weight_shape[1]]),
             outputs.into_iter().map(|x| Rc::new(x)).collect(),
         )?])
+    }
+    
+    fn backward(
+        &self,
+        layouter: impl Layouter<F>,
+        inputs: &Vec<AssignedTensorRef<F>>,
+        constants: &HashMap<i64, CellRc<F>>,
+        attributes: &HashMap<String, f64>,
+    ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
+        todo!()
     }
 }
 
