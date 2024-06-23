@@ -1,12 +1,9 @@
-use std::sync::Arc;
-
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use zkml::{
     graph::Graph,
     model::ModelCircuit,
-    numerics::numeric::NumericConfig,
     utils::{
-        helpers::{to_field, NUMERIC_CONFIG},
+        helpers::{configure_static_numeric_config, to_field},
         loader::load_from_json,
     },
 };
@@ -20,17 +17,7 @@ fn main() {
     // Set numeric config
     let k = 10;
     let scale_factor = 1 << 9;
-    let nconfig = &NUMERIC_CONFIG;
-    let cloned = nconfig.lock().unwrap().clone();
-    *nconfig.lock().unwrap() = NumericConfig {
-        k,
-        scale_factor,
-        num_rows: (1 << k) - 10 + 1,
-        num_cols: 10,
-        use_selectors: true,
-        used_numerics: Arc::new(circuit.clone().used_numerics),
-        ..cloned
-    };
+    configure_static_numeric_config(k, 10, scale_factor, circuit.clone().used_numerics.clone());
 
     // Run the circuit
     let output = circuit.forward().unwrap();

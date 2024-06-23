@@ -9,6 +9,7 @@ use crate::{numerics::numeric::NumericType, utils::helpers::{AssignedTensor, Ass
 pub enum OPType {
     GEMM,
     ReLU,
+    SoftMax,
     #[default]
     None,
 }

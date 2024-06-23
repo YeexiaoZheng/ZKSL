@@ -44,6 +44,7 @@ impl<F: PrimeField> GemmChip<F> {
         Ok(vec![input.dot(&weight).into_dyn()])
     }
 
+    // This function is used for non-circuit backward
     pub fn backward(
         inputs: &Vec<Tensor>,
         _attributes: &HashMap<String, f64>,

@@ -11,8 +11,11 @@ use halo2_proofs::{
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum NumericType {
+    InputLookup,
     Dot,
     Accumulator,
+    ReLU,
+    Exp,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -43,14 +46,17 @@ pub struct NumericConfig {
     pub scale_factor: u64,
     pub num_rows: usize,
     pub num_cols: usize,
+    pub min_val: i64,
+    pub max_val: i64,
+    pub shift_min_val: i64,
 
     // columns
     pub columns: Vec<Column<Advice>>,
     pub constants: Vec<Column<Fixed>>,
 
     // lookup tables
-    // pub tables: HashMap<NumericType, Vec<TableColumn>>,
-    // pub maps: HashMap<NumericType, Vec<HashMap<i64, i64>>>,
+    pub tables: HashMap<NumericType, Vec<TableColumn>>,
+    pub maps: HashMap<NumericType, Vec<HashMap<i64, i64>>>,
 
     // selectors
     pub use_selectors: bool,
@@ -106,7 +112,9 @@ pub trait Numeric<F: PrimeField> {
                     let row_outputs =
                         match self.compute_row(&mut region, i, &row_inputs, &constants) {
                             Ok(res) => res,
-                            Err(e) => panic!("Error in {} numeric op_row_region: {:?}", self.name(), e),
+                            Err(e) => {
+                                panic!("Error in {} numeric op_row_region: {:?}", self.name(), e)
+                            }
                         };
                     // Check that the outputs' len is 1.
                     assert_eq!(row_outputs.len(), 1);
@@ -120,8 +128,17 @@ pub trait Numeric<F: PrimeField> {
     // Forward pass for the numeric operation.
     fn forward(
         &self,
-        layouter: impl Layouter<F>,
+        mut layouter: impl Layouter<F>,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,
         constants: &Vec<&AssignedCell<F, F>>,
-    ) -> Result<Vec<AssignedCell<F, F>>, Error>;
+    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
+        if inputs[0].len() % self.num_input_cols_per_row() != 0 {
+            panic!("Input columns in {} chip are not aligned, please override the forward function to handle this case.", self.name());
+        }
+        self.compute_rows(
+            layouter.namespace(|| format!("{} forward", self.name())),
+            inputs,
+            constants,
+        )
+    }
 }

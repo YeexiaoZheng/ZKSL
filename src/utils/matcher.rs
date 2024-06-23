@@ -22,6 +22,7 @@ pub fn match_op_type(op_type: String) -> OPType {
     match op_type.as_str() {
         "Gemm" => OPType::GEMM,
         "ReLU" => OPType::ReLU,
+        "SoftMax" => OPType::SoftMax,
         "None" => OPType::None,
         _ => OPType::None,
     }
@@ -40,8 +41,11 @@ pub fn match_configure<F: PrimeField>(
     numeric_type: NumericType,
 ) -> fn(&mut ConstraintSystem<F>, NumericConfig) -> NumericConfig {
     match numeric_type {
+        NumericType::InputLookup => AccumulatorChip::<F>::configure,
         NumericType::Dot => DotChip::<F>::configure,
         NumericType::Accumulator => AccumulatorChip::<F>::configure,
+        NumericType::ReLU => AccumulatorChip::<F>::configure,
+        NumericType::Exp => AccumulatorChip::<F>::configure,
     }
 }
 
@@ -49,6 +53,12 @@ pub fn match_consumer<F: PrimeField>(op_type: OPType) -> Box<dyn NumericConsumer
     match op_type {
         OPType::GEMM => {
             Box::new(GemmChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
+        }
+        OPType::ReLU => {
+            Box::new(NoneChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
+        }
+        OPType::SoftMax => {
+            Box::new(NoneChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
         }
         _ => Box::new(NoneChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>,
     }
