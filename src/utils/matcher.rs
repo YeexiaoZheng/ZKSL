@@ -1,12 +1,20 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
-use halo2_proofs::{halo2curves::ff::PrimeField, plonk::ConstraintSystem};
+use halo2_proofs::{
+    circuit::Layouter,
+    halo2curves::ff::PrimeField,
+    plonk::{ConstraintSystem, Error},
+};
 use ndarray::ShapeError;
 
 use crate::{
     numerics::{
         accumulator::AccumulatorChip,
         dot::DotChip,
+        nonlinear::{
+            exp::ExpChip, input_lookup::InputLookupChip, nonlinear::NonLinearNumeric,
+            relu::ReluChip,
+        },
         numeric::{NumericConfig, NumericType},
     },
     operations::{
@@ -41,11 +49,11 @@ pub fn match_configure<F: PrimeField>(
     numeric_type: NumericType,
 ) -> fn(&mut ConstraintSystem<F>, NumericConfig) -> NumericConfig {
     match numeric_type {
-        NumericType::InputLookup => AccumulatorChip::<F>::configure,
+        NumericType::InputLookup => InputLookupChip::<F>::configure,
         NumericType::Dot => DotChip::<F>::configure,
         NumericType::Accumulator => AccumulatorChip::<F>::configure,
-        NumericType::ReLU => AccumulatorChip::<F>::configure,
-        NumericType::Exp => AccumulatorChip::<F>::configure,
+        NumericType::ReLU => ReluChip::<F>::configure,
+        NumericType::Exp => ExpChip::<F>::configure,
     }
 }
 
@@ -61,5 +69,21 @@ pub fn match_consumer<F: PrimeField>(op_type: OPType) -> Box<dyn NumericConsumer
             Box::new(NoneChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
         }
         _ => Box::new(NoneChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>,
+    }
+}
+
+pub fn match_load_lookups<F: PrimeField>(
+    numeric_config: Rc<NumericConfig>,
+    numeric_type: NumericType,
+    mut layouter: impl Layouter<F>,
+) -> Result<(), Error> {
+    match numeric_type {
+        NumericType::InputLookup => InputLookupChip::<F>::construct(numeric_config)
+            .load_lookups(layouter.namespace(|| "input lookup")),
+        NumericType::ReLU => ReluChip::<F>::construct(numeric_config)
+            .load_lookups(layouter.namespace(|| "relu lookup")),
+        NumericType::Exp => ExpChip::<F>::construct(numeric_config)
+            .load_lookups(layouter.namespace(|| "exp lookup")),
+        _ => Ok(()),
     }
 }

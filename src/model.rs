@@ -21,7 +21,9 @@ use crate::{
     },
     utils::{
         helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
-        matcher::{match_configure, match_consumer, match_op_type, match_operation},
+        matcher::{
+            match_configure, match_consumer, match_load_lookups, match_op_type, match_operation,
+        },
     },
 };
 
@@ -238,6 +240,11 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
                 config.numeric_config.clone(),
             )
             .unwrap();
+
+        // Load lookups
+        for numeric_type in config.numeric_config.used_numerics.iter() {
+            match_load_lookups(config.numeric_config, *numeric_type, layouter);
+        }
 
         // Run the circuit by each operation chips
         for op in self.graph.nodes.iter() {
