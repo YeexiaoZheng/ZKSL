@@ -53,7 +53,7 @@ impl<F: PrimeField> NonLinearNumeric<F> for ReluChip<F> {
 
 impl<F: PrimeField> Numeric<F> for ReluChip<F> {
     fn name(&self) -> String {
-        "Exp".to_string()
+        "Relu".to_string()
     }
 
     fn num_cols_per_op(&self) -> usize {
