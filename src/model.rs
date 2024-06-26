@@ -243,7 +243,14 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
 
         // Load lookups
         for numeric_type in config.numeric_config.used_numerics.iter() {
-            match_load_lookups(config.numeric_config, *numeric_type, layouter);
+            match match_load_lookups(
+                config.numeric_config.clone(),
+                *numeric_type,
+                layouter.namespace(|| "load_lookups"),
+            ) {
+                Ok(_) => (),
+                Err(e) => panic!("Error occurs at ModelCircuit.synthesize load lookups: {:?}", e),
+            }
         }
 
         // Run the circuit by each operation chips

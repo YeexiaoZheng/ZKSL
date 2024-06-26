@@ -6,7 +6,7 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Error},
 };
 
-use crate::numerics::numeric::{Numeric, NumericConfig, NumericType};
+use crate::{numerics::numeric::{Numeric, NumericConfig, NumericType}, utils::math::relu};
 
 use super::nonlinear::NonLinearNumeric;
 
@@ -32,12 +32,11 @@ impl<F: PrimeField> ReluChip<F> {
 }
 
 impl<F: PrimeField> NonLinearNumeric<F> for ReluChip<F> {
-    fn generate_map(scale_factor: u64, min_val: i64, num_rows: i64) -> HashMap<i64, i64> {
+    fn generate_map(_scale_factor: u64, min_val: i64, num_rows: i64) -> HashMap<i64, i64> {
         (0..num_rows)
-            .map(|i| {
-                let shifted = i + min_val;
-                let relu = shifted.max(0);
-                (i as i64, relu)
+            .map(|idx| {
+                let x = idx + min_val;
+                (x, relu(x))
             })
             .collect::<HashMap<_, _>>()
     }

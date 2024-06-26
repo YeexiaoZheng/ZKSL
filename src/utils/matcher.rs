@@ -11,10 +11,8 @@ use crate::{
     numerics::{
         accumulator::AccumulatorChip,
         dot::DotChip,
-        nonlinear::{
-            exp::ExpChip, input_lookup::InputLookupChip, nonlinear::NonLinearNumeric,
-            relu::ReluChip,
-        },
+        lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip},
+        nonlinear::{exp::ExpChip, nonlinear::NonLinearNumeric, relu::ReluChip},
         numeric::{NumericConfig, NumericType},
     },
     operations::{
@@ -49,7 +47,8 @@ pub fn match_configure<F: PrimeField>(
     numeric_type: NumericType,
 ) -> fn(&mut ConstraintSystem<F>, NumericConfig) -> NumericConfig {
     match numeric_type {
-        NumericType::InputLookup => InputLookupChip::<F>::configure,
+        NumericType::RowLookUp => RowLookUpChip::<F>::configure,
+        NumericType::FieldLookUp => FieldLookUpChip::<F>::configure,
         NumericType::Dot => DotChip::<F>::configure,
         NumericType::Accumulator => AccumulatorChip::<F>::configure,
         NumericType::ReLU => ReluChip::<F>::configure,
@@ -78,8 +77,13 @@ pub fn match_load_lookups<F: PrimeField>(
     mut layouter: impl Layouter<F>,
 ) -> Result<(), Error> {
     match numeric_type {
-        NumericType::InputLookup => InputLookupChip::<F>::construct(numeric_config)
-            .load_lookups(layouter.namespace(|| "input lookup")),
+        // Input lookups
+        NumericType::RowLookUp => RowLookUpChip::<F>::construct(numeric_config)
+            .load_lookups(layouter.namespace(|| "row lookup")),
+        NumericType::FieldLookUp => FieldLookUpChip::<F>::construct(numeric_config)
+            .load_lookups(layouter.namespace(|| "field lookup")),
+
+        // Non-linear lookups
         NumericType::ReLU => ReluChip::<F>::construct(numeric_config)
             .load_lookups(layouter.namespace(|| "relu lookup")),
         NumericType::Exp => ExpChip::<F>::construct(numeric_config)

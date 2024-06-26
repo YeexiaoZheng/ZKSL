@@ -121,10 +121,10 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
     
     fn backward(
         &self,
-        layouter: impl Layouter<F>,
-        inputs: &Vec<AssignedTensorRef<F>>,
-        constants: &HashMap<i64, CellRc<F>>,
-        attributes: &HashMap<String, f64>,
+        _layouter: impl Layouter<F>,
+        _inputs: &Vec<AssignedTensorRef<F>>,
+        _constants: &HashMap<i64, CellRc<F>>,
+        _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         todo!()
     }

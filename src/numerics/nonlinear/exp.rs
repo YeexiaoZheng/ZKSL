@@ -38,6 +38,7 @@ impl<F: PrimeField> NonLinearNumeric<F> for ExpChip<F> {
                 let shifted = i + min_val;
                 let x = (shifted as f64) / (scale_factor as f64);
                 let exp = (x.exp() * ((scale_factor * scale_factor) as f64)).round() as i64;
+                println!("i: {}, exp: {}", i, exp);
                 (i as i64, exp)
             })
             .collect::<HashMap<_, _>>()

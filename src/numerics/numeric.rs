@@ -11,7 +11,9 @@ use halo2_proofs::{
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum NumericType {
-    InputLookup,
+    RowLookUp,
+    FieldLookUp,
+
     Dot,
     Accumulator,
     ReLU,

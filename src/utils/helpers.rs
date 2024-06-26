@@ -7,7 +7,8 @@ use std::{
 use halo2_proofs::{circuit::AssignedCell, halo2curves::ff::PrimeField};
 use lazy_static::lazy_static;
 use ndarray::{Array, ArrayView, IxDyn};
-use num_bigint::{BigUint, ToBigUint};
+use num_bigint::BigUint;
+use num_traits::ToPrimitive;
 
 use crate::numerics::numeric::{NumericConfig, NumericType};
 
@@ -29,6 +30,7 @@ pub fn configure_static_numeric_config(
 ) {
     let nconfig = &NUMERIC_CONFIG;
     let cloned = nconfig.lock().unwrap().clone();
+    // To ensure that max_val - min_val = num_rows
     *nconfig.lock().unwrap() = NumericConfig {
         k,
         scale_factor,
@@ -66,5 +68,5 @@ pub fn convert_to_u64<F: PrimeField>(x: &F) -> u64 {
 
 pub fn convert_to_u128<F: PrimeField>(x: &F) -> u128 {
     let big = BigUint::from_bytes_le(x.to_repr().as_ref());
-    big.to_biguint().unwrap().to_u128().unwrap()
+    big.to_u128().unwrap()
 }

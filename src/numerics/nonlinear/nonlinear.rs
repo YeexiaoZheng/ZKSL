@@ -3,11 +3,14 @@ use std::{collections::HashMap, rc::Rc};
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region, Value},
     halo2curves::ff::PrimeField,
-    plonk::{ConstraintSystem, Error, Expression, Selector},
+    plonk::{ConstraintSystem, Error, Selector},
     poly::Rotation,
 };
 
-use crate::{numerics::numeric::{Numeric, NumericConfig, NumericType}, utils::helpers::convert_to_u128};
+use crate::{
+    numerics::numeric::{Numeric, NumericConfig, NumericType},
+    utils::helpers::convert_to_u128,
+};
 
 const NUM_LOOKUP_COLS_PER_OP: usize = 2;
 
@@ -46,7 +49,7 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         let columns = numeric_config.columns;
 
         let mut tables = numeric_config.tables;
-        let input_lookup = match tables.get(&NumericType::InputLookup) {
+        let input_lookup = match tables.get(&NumericType::FieldLookUp) {
             Some(tables) => tables,
             None => panic!("Input lookup table not found"),
         }[0];
@@ -58,11 +61,8 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
                 let s = meta.query_selector(s);
                 let input_col = meta.query_advice(columns[offset + 0], Rotation::cur());
                 let output_col = meta.query_advice(columns[offset + 1], Rotation::cur());
-                let shift_val = numeric_config.min_val;
-                let shift_val_pos = Expression::Constant(F::from((-shift_val) as u64));
-
                 vec![
-                    (s.clone() * (input_col + shift_val_pos), input_lookup),
+                    (s.clone() * input_col, input_lookup),
                     (s.clone() * output_col, output_lookup),
                 ]
             });
@@ -133,7 +133,7 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         region: &mut Region<F>,
         row_offset: usize,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,
-        constants: &Vec<&AssignedCell<F, F>>,
+        _constants: &Vec<&AssignedCell<F, F>>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         let numeric_config = self.get_numeric_config();
         let columns = &self.get_numeric_config().columns;
