@@ -43,13 +43,12 @@ impl<F: PrimeField> FieldLookUpChip<F> {
         layouter.assign_table(
             || "field input lookup",
             |mut table| {
-                for (offset, x) in
-                    (self.numeric_config.min_val..self.numeric_config.max_val).enumerate()
-                {
+                for i in 0..self.numeric_config.num_rows {
+                    let x = i as i64 + self.numeric_config.min_val;
                     table.assign_cell(
                         || "field lookup cell",
                         lookup,
-                        offset,
+                        i,
                         || Value::known(to_field::<F>(x)),
                     )?;
                 }

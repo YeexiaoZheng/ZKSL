@@ -1,11 +1,15 @@
 pub type Int = i64;
 
-pub fn exp(x: Int) -> Int {
-    (x as f64).exp() as Int
+pub fn exp(x: Int, sf: u64) -> Int {
+    let x = x as f64 / sf as f64;
+    let exp = x.exp() * sf as f64;
+    exp as Int
 }
 
-pub fn ln(x: Int) -> Int {
-    (x as f64).ln() as Int
+pub fn ln(x: Int, sf: u64) -> Int {
+    let x = x as f64 / sf as f64;
+    let ln = x.ln() * sf as f64;
+    ln as Int
 }
 
 pub fn sqrt(x: Int) -> Int {

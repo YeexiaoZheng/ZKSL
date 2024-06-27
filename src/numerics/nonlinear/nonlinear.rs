@@ -98,12 +98,13 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         layouter.assign_table(
             || "non-linear table",
             |mut table| {
-                for (offset, x) in (config.min_val..config.max_val).enumerate() {
+                for i in 0..config.num_rows {
+                    let x = i as i64 + config.min_val;
                     let val = to_field::<F>(self.get_val_in_map(x));
                     table.assign_cell(
                         || "non-linear cell",
                         output_lookup,
-                        offset,
+                        i,
                         || Value::known(val),
                     )?;
                 }

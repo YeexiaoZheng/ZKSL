@@ -14,6 +14,10 @@ pub enum NumericType {
     RowLookUp,
     FieldLookUp,
 
+    Add,
+    Sub,
+    Mul,
+    Div,
     Dot,
     Accumulator,
     Relu,

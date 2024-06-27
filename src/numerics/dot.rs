@@ -111,13 +111,13 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
 
         // Assign input and weight columns by copy advice
         let inp_cols = DotChip::<F>::get_input_columns(&self.config);
-        input
+        let input = input
             .iter()
             .enumerate()
             .map(|(i, cell)| cell.copy_advice(|| "", region, inp_cols[i], row_offset))
             .collect::<Result<Vec<_>, _>>()?;
         let weight_cols = DotChip::<F>::get_weight_columns(&self.config);
-        weight
+        let weight = weight
             .iter()
             .enumerate()
             .map(|(i, cell)| cell.copy_advice(|| "", region, weight_cols[i], row_offset))
@@ -181,8 +181,8 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
         )?;
 
         // Use accumulator to sum up all outputs
-        let acc = AccumulatorChip::<F>::construct(self.config.clone());
-        Ok(acc.forward(
+        let acc_chip = AccumulatorChip::<F>::construct(self.config.clone());
+        Ok(acc_chip.forward(
             layouter.namespace(|| "dot adder"),
             &vec![outputs.iter().collect::<Vec<_>>()],
             &vec![zero],

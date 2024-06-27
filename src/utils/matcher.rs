@@ -9,11 +9,7 @@ use ndarray::ShapeError;
 
 use crate::{
     numerics::{
-        accumulator::AccumulatorChip,
-        dot::DotChip,
-        lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip},
-        nonlinear::{exp::ExpChip, ln::LnChip, nonlinear::NonLinearNumeric, relu::ReluChip},
-        numeric::{NumericConfig, NumericType},
+        accumulator::AccumulatorChip, add::AddChip, div::DivChip, dot::DotChip, lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip}, mul::MulChip, nonlinear::{exp::ExpChip, ln::LnChip, nonlinear::NonLinearNumeric, relu::ReluChip}, numeric::{NumericConfig, NumericType}, sub::SubChip
     },
     operations::{
         gemm::GemmChip,
@@ -51,6 +47,10 @@ pub fn match_configure<F: PrimeField>(
     match numeric_type {
         NumericType::RowLookUp => RowLookUpChip::<F>::configure,
         NumericType::FieldLookUp => FieldLookUpChip::<F>::configure,
+        NumericType::Add => AddChip::<F>::configure,
+        NumericType::Sub => SubChip::<F>::configure,
+        NumericType::Mul => MulChip::<F>::configure,
+        NumericType::Div => DivChip::<F>::configure,
         NumericType::Dot => DotChip::<F>::configure,
         NumericType::Accumulator => AccumulatorChip::<F>::configure,
         NumericType::Relu => ReluChip::<F>::configure,

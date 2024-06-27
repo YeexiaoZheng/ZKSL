@@ -6,7 +6,10 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Error},
 };
 
-use crate::numerics::numeric::{Numeric, NumericConfig, NumericType};
+use crate::{
+    numerics::numeric::{Numeric, NumericConfig, NumericType},
+    utils::math::exp,
+};
 
 use super::nonlinear::NonLinearNumeric;
 
@@ -35,11 +38,9 @@ impl<F: PrimeField> NonLinearNumeric<F> for ExpChip<F> {
     fn generate_map(scale_factor: u64, min_val: i64, num_rows: i64) -> HashMap<i64, i64> {
         (0..num_rows)
             .map(|i| {
-                let shifted = i + min_val;
-                let x = (shifted as f64) / (scale_factor as f64);
-                let exp = (x.exp() * ((scale_factor * scale_factor) as f64)).round() as i64;
-                println!("i: {}, exp: {}", i, exp);
-                (i as i64, exp)
+                let x = i + min_val;
+                let exp = exp(x, scale_factor);
+                (x, exp)
             })
             .collect::<HashMap<_, _>>()
     }
@@ -47,7 +48,7 @@ impl<F: PrimeField> NonLinearNumeric<F> for ExpChip<F> {
     fn get_numeric_config(&self) -> Rc<NumericConfig> {
         self.numeric_config.clone()
     }
-    
+
     fn get_numeric_type(&self) -> NumericType {
         NumericType::Exp
     }
