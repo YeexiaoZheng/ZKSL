@@ -123,7 +123,6 @@ impl<F: PrimeField> ModelCircuit<F> {
     ) -> Result<HashMap<i64, CellRc<F>>, Error> {
         let sf = config.scale_factor;
         // let min_val = config.min_val;
-        let min_val = -(1 << (config.k - 1));
         // let max_val = config.max_val;
 
         Ok(layouter.assign_region(
@@ -132,14 +131,12 @@ impl<F: PrimeField> ModelCircuit<F> {
                 let mut constants: HashMap<i64, CellRc<F>> = HashMap::new();
 
                 let vals = vec![0 as i64, 1, sf as i64 /*min_val, max_val*/];
-                let shift_val_i64 = -min_val * 2; // FIXME
-                let shift_val_f = F::from(shift_val_i64 as u64);
                 for (i, val) in vals.iter().enumerate() {
                     let cell = region.assign_fixed(
                         || format!("constant_{}", i),
                         config.constants[0],
                         i,
-                        || Value::known(F::from((val + shift_val_i64) as u64) - shift_val_f),
+                        || Value::known(to_field::<F>(*val)),
                     )?;
                     constants.insert(*val, Rc::new(cell));
                 }

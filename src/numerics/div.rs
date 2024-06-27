@@ -43,8 +43,8 @@ impl<F: PrimeField> DivChip<F> {
                     let inp1 = meta.query_advice(columns[offset + 0], Rotation::cur());
                     let inp2 = meta.query_advice(columns[offset + 1], Rotation::cur());
                     let outp = meta.query_advice(columns[offset + 2], Rotation::cur());
-                    let bias = meta.query_advice(columns[offset + 3], Rotation::cur());
-                    s.clone() * (inp1 - bias - inp2 * outp)
+                    let reminder = meta.query_advice(columns[offset + 3], Rotation::cur());
+                    s.clone() * (inp1 - reminder - inp2 * outp)
                 })
                 .collect::<Vec<_>>()
         });
@@ -110,10 +110,8 @@ impl<F: PrimeField> Numeric<F> for DivChip<F> {
                 .zip(in2.value().map(|b| b))
                 .map(|(a, b)| to_field::<F>(to_primitive::<F>(a) / to_primitive::<F>(b)));
             let out = region.assign_advice(|| "assign out", columns[offset + 2], row_offset, || out)?;
-            let bias = in1.value().copied() - in2.value().copied() * out.value().copied();
-            // println!("out: {:?}", out);
-            // println!("bias: {:?}", bias);
-            region.assign_advice(|| "assign bias", columns[offset + 3], row_offset, || bias)?;
+            let reminder = in1.value().copied() - in2.value().copied() * out.value().copied();
+            region.assign_advice(|| "assign bias", columns[offset + 3], row_offset, || reminder)?;
             res.push(out);
         }
 

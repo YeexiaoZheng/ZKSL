@@ -91,7 +91,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
             .clone();
         let constants = vec![zero.as_ref(), one.as_ref(), sf.as_ref()];
 
-        // Initialize dot chip
+        // Initialize numeric chip
         let dot_chip = DotChip::construct(self.numeric_config.clone());
         let div_chip = DivChip::construct(self.numeric_config.clone());
 
@@ -123,11 +123,13 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
         }
 
         println!("pass dot");
-
         // Divide by scale factor
         let outputs = match div_chip.forward(
             layouter.namespace(|| "div"),
-            &vec![outputs.iter().collect::<Vec<_>>(), vec![sf.as_ref(); outputs.len()]],
+            &vec![
+                outputs.iter().collect(),
+                vec![sf.clone().as_ref(); outputs.len()],
+            ],
             &constants,
         ) {
             Ok(output) => output,

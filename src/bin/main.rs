@@ -17,7 +17,7 @@ fn main() {
 
     // Set numeric config
     let k = 14;
-    configure_static_numeric_config(k, 10, scale_factor, circuit.clone().used_numerics.clone());
+    configure_static_numeric_config(k, 12, scale_factor, circuit.clone().used_numerics.clone());
 
     // Run the circuit
     let output = circuit.forward().unwrap();
@@ -25,6 +25,6 @@ fn main() {
 
     // Verify the circuit
     let public = output.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
-    let prover = MockProver::run(14, &circuit, vec![public]).unwrap();
+    let prover = MockProver::run(k as u32, &circuit, vec![public]).unwrap();
     assert_eq!(prover.verify(), Ok(()));
 }

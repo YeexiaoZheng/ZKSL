@@ -47,7 +47,7 @@ impl<F: PrimeField> MulChip<F> {
         });
 
         let mut selectors = numeric_config.selectors;
-        selectors.insert(NumericType::Dot, vec![selector]);
+        selectors.insert(NumericType::Mul, vec![selector]);
 
         MulConfig {
             columns: numeric_config.columns,
