@@ -12,6 +12,8 @@ use num_traits::ToPrimitive;
 
 use crate::numerics::numeric::{NumericConfig, NumericType};
 
+use super::math::Int;
+
 pub type Tensor = Array<i64, IxDyn>;
 pub type FieldTensor<F> = Array<F, IxDyn>;
 pub type CellRc<F> = Rc<AssignedCell<F, F>>;
@@ -44,10 +46,18 @@ pub fn configure_static_numeric_config(
     };
 }
 
-pub fn to_field<F: PrimeField>(x: i64) -> F {
+pub fn to_field<F: PrimeField>(x: Int) -> F {
     let bias = 1 << 31;
     let x_pos = x + bias;
     F::from(x_pos as u64) - F::from(bias as u64)
+}
+
+pub fn to_primitive<F: PrimeField>(x: &F) -> Int {
+    let bias = 1 << 31;
+    let fbias = F::from(bias as u64);
+    let big = BigUint::from_bytes_le(&(*x + fbias).to_repr().as_ref());
+    let big = big.to_u128().unwrap();
+    big as Int - bias
 }
 
 // TODO: refactor

@@ -16,8 +16,9 @@ pub enum NumericType {
 
     Dot,
     Accumulator,
-    ReLU,
+    Relu,
     Exp,
+    Ln
 }
 
 #[derive(Clone, Debug, Default)]

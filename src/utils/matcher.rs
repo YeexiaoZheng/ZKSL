@@ -12,13 +12,14 @@ use crate::{
         accumulator::AccumulatorChip,
         dot::DotChip,
         lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip},
-        nonlinear::{exp::ExpChip, nonlinear::NonLinearNumeric, relu::ReluChip},
+        nonlinear::{exp::ExpChip, ln::LnChip, nonlinear::NonLinearNumeric, relu::ReluChip},
         numeric::{NumericConfig, NumericType},
     },
     operations::{
         gemm::GemmChip,
         none::NoneChip,
         operation::{NumericConsumer, OPType},
+        relu::ReLUChip,
     },
 };
 
@@ -39,6 +40,7 @@ pub fn match_operation<F: PrimeField>(
 ) -> fn(&Vec<Tensor>, &HashMap<String, f64>) -> Result<Vec<Tensor>, ShapeError> {
     match op_type {
         OPType::GEMM => GemmChip::<F>::forward,
+        OPType::ReLU => ReLUChip::<F>::forward,
         _ => NoneChip::<F>::forward,
     }
 }
@@ -51,8 +53,9 @@ pub fn match_configure<F: PrimeField>(
         NumericType::FieldLookUp => FieldLookUpChip::<F>::configure,
         NumericType::Dot => DotChip::<F>::configure,
         NumericType::Accumulator => AccumulatorChip::<F>::configure,
-        NumericType::ReLU => ReluChip::<F>::configure,
+        NumericType::Relu => ReluChip::<F>::configure,
         NumericType::Exp => ExpChip::<F>::configure,
+        NumericType::Ln => LnChip::<F>::configure,
     }
 }
 
@@ -62,7 +65,7 @@ pub fn match_consumer<F: PrimeField>(op_type: OPType) -> Box<dyn NumericConsumer
             Box::new(GemmChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
         }
         OPType::ReLU => {
-            Box::new(NoneChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
+            Box::new(ReLUChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
         }
         OPType::SoftMax => {
             Box::new(NoneChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
@@ -84,7 +87,7 @@ pub fn match_load_lookups<F: PrimeField>(
             .load_lookups(layouter.namespace(|| "field lookup")),
 
         // Non-linear lookups
-        NumericType::ReLU => ReluChip::<F>::construct(numeric_config)
+        NumericType::Relu => ReluChip::<F>::construct(numeric_config)
             .load_lookups(layouter.namespace(|| "relu lookup")),
         NumericType::Exp => ExpChip::<F>::construct(numeric_config)
             .load_lookups(layouter.namespace(|| "exp lookup")),

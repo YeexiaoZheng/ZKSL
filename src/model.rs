@@ -18,6 +18,7 @@ use crate::{
         gemm::GemmChip,
         none::NoneChip,
         operation::{OPType, Operation},
+        relu::ReLUChip,
     },
     utils::{
         helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
@@ -249,7 +250,10 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
                 layouter.namespace(|| "load_lookups"),
             ) {
                 Ok(_) => (),
-                Err(e) => panic!("Error occurs at ModelCircuit.synthesize load lookups: {:?}", e),
+                Err(e) => panic!(
+                    "Error occurs at ModelCircuit.synthesize load lookups: {:?}",
+                    e
+                ),
             }
         }
 
@@ -269,13 +273,19 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
                     &constants,
                     &op.attributes,
                 ),
+                OPType::ReLU => ReLUChip::<F>::construct(config.numeric_config.clone()).forward(
+                    layouter.namespace(|| op.op_type.clone()),
+                    &inputs,
+                    &constants,
+                    &op.attributes,
+                ),
                 OPType::None => NoneChip::<F>::construct(config.numeric_config.clone()).forward(
                     layouter.namespace(|| op.op_type.clone()),
                     &inputs,
                     &constants,
                     &op.attributes,
                 ),
-                _ => panic!("Layer type not supported"),
+                _ => panic!("Operation type not supported"),
             }
             .unwrap();
             // Insert the output to the assigned tensor map

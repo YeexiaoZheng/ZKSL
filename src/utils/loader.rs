@@ -33,7 +33,7 @@ pub fn load_from_json(_file_path: &str) -> GraphJson {
         "tensor_map": {
             "input": {
                 "shape": [1, 10], 
-                "data": [-1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                "data": [-1, -1, -1, -1, -1, 1, 1, 1, 1, 1]
             },
             "mlp1.weight": {
                 "shape": [10, 10], 
@@ -52,8 +52,14 @@ pub fn load_from_json(_file_path: &str) -> GraphJson {
                 "attributes": {"alpha": 1.0, "beta": 1.0, "transB": 1}
             },
             {
+                "op_type": "ReLU",
+                "inputs": ["/mlp1/Gemm_output_0"],
+                "outputs": ["/relu/output_0"],
+                "attributes": {}
+            },
+            {
                 "op_type": "Gemm",
-                "inputs": ["/mlp1/Gemm_output_0", "mlp2.weight"],
+                "inputs": ["/relu/output_0", "mlp2.weight"],
                 "outputs": ["output"],
                 "attributes": {"alpha": 1.0, "beta": 1.0, "transB": 1}
             }

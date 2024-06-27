@@ -9,7 +9,7 @@ use halo2_proofs::{
 
 use crate::{
     numerics::numeric::{Numeric, NumericConfig, NumericType},
-    utils::helpers::convert_to_u128,
+    utils::helpers::{to_field, to_primitive},
 };
 
 const NUM_LOOKUP_COLS_PER_OP: usize = 2;
@@ -51,7 +51,7 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         let mut tables = numeric_config.tables;
         let input_lookup = match tables.get(&NumericType::FieldLookUp) {
             Some(tables) => tables,
-            None => panic!("Input lookup table not found"),
+            None => panic!("Input field lookup table not found"),
         }[0];
         let output_lookup = meta.lookup_table_column();
 
@@ -93,32 +93,17 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
     fn load_lookups(&self, mut layouter: impl Layouter<F>) -> Result<(), Error> {
         let config = self.get_numeric_config();
         let numeric_type = self.get_numeric_type();
+        let output_lookup = config.tables.get(&numeric_type).unwrap()[1];
 
-        let table_col = config.tables.get(&numeric_type).unwrap()[1];
-
-        let shift_pos_i64 = -config.shift_min_val;
-        let shift_pos = F::from(shift_pos_i64 as u64);
         layouter.assign_table(
-            || "non linear table",
+            || "non-linear table",
             |mut table| {
-                for i in 0..config.num_rows {
-                    let i = i as i64;
-                    // FIXME: refactor this
-                    let tmp = self.get_val_in_map(i);
-                    let val = if i == 0 {
-                        F::ZERO
-                    } else {
-                        if tmp >= 0 {
-                            F::from(tmp as u64)
-                        } else {
-                            let tmp = tmp + shift_pos_i64;
-                            F::from(tmp as u64) - shift_pos
-                        }
-                    };
+                for (offset, x) in (config.min_val..config.max_val).enumerate() {
+                    let val = to_field::<F>(self.get_val_in_map(x));
                     table.assign_cell(
-                        || "non linear cell",
-                        table_col,
-                        i as usize,
+                        || "non-linear cell",
+                        output_lookup,
+                        offset,
                         || Value::known(val),
                     )?;
                 }
@@ -138,46 +123,30 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         let numeric_config = self.get_numeric_config();
         let columns = &self.get_numeric_config().columns;
         let input = &inputs[0];
-        let shift_val_pos_i64 = -numeric_config.shift_min_val;
-        let shift_val_pos = F::from(shift_val_pos_i64 as u64);
-        let min_val = numeric_config.min_val;
 
         if numeric_config.use_selectors {
             let selector = self.get_selector();
             selector.enable(region, row_offset)?;
         }
 
-        let mut outps = vec![];
-        for i in 0..input.len() {
-            let offset = i * 2;
-            input[i].copy_advice(|| "", region, columns[offset + 0], row_offset)?;
-            let outp = input[i].value().map(|x: &F| {
-                let pos =
-                    convert_to_u128(&(*x + shift_val_pos)) as i128 - shift_val_pos_i64 as i128;
-                let x = pos as i64 - min_val;
-                let val = self.get_val_in_map(x);
-                if x == 0 {
-                    F::ZERO
-                } else {
-                    if val >= 0 {
-                        F::from(val as u64)
-                    } else {
-                        let val_pos = val + shift_val_pos_i64;
-                        F::from(val_pos as u64) - F::from(shift_val_pos_i64 as u64)
-                    }
-                }
-            });
+        input
+            .iter()
+            .enumerate()
+            .map(|(i, cell)| cell.copy_advice(|| "", region, columns[i * 2], row_offset))
+            .collect::<Result<Vec<_>, _>>()?;
 
-            let outp = region.assign_advice(
-                || "nonlinearity",
-                columns[offset + 1],
-                row_offset,
-                || outp,
-            )?;
-            outps.push(outp);
-        }
+        let res = input
+            .iter()
+            .enumerate()
+            .map(|(i, cell)| {
+                let value = cell
+                    .value()
+                    .map(|x| to_field::<F>(self.get_val_in_map(to_primitive::<F>(x))));
+                region.assign_advice(|| "non-linear", columns[i * 2 + 1], row_offset, || value)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
-        Ok(outps)
+        Ok(res)
     }
 
     // Forward pass for the numeric operation.

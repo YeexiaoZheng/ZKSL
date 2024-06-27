@@ -1,4 +1,4 @@
-type Int = i64;
+pub type Int = i64;
 
 pub fn exp(x: Int) -> Int {
     (x as f64).exp() as Int

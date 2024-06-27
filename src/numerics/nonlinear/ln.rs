@@ -27,7 +27,7 @@ impl<F: PrimeField> LnChip<F> {
         meta: &mut ConstraintSystem<F>,
         numeric_config: NumericConfig,
     ) -> NumericConfig {
-        Self::_configure(meta, numeric_config, NumericType::Exp)
+        Self::_configure(meta, numeric_config, NumericType::Relu)
     }
 }
 
@@ -48,7 +48,7 @@ impl<F: PrimeField> NonLinearNumeric<F> for LnChip<F> {
     }
     
     fn get_numeric_type(&self) -> NumericType {
-        NumericType::Exp
+        NumericType::Ln
     }
 }
 
@@ -67,11 +67,11 @@ impl<F: PrimeField> Numeric<F> for LnChip<F> {
 
     fn compute_row(
         &self,
-        _region: &mut Region<F>,
-        _row_offset: usize,
-        _inputs: &Vec<Vec<&AssignedCell<F, F>>>,
-        _constants: &Vec<&AssignedCell<F, F>>,
+        region: &mut Region<F>,
+        row_offset: usize,
+        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
+        constants: &Vec<&AssignedCell<F, F>>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
-        todo!()
+        <Self as NonLinearNumeric<F>>::compute_row(&self, region, row_offset, inputs, constants)
     }
 }
