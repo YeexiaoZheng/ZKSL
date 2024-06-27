@@ -5,6 +5,7 @@ use ndarray::{s, Array, IxDyn, ShapeError};
 
 use crate::{
     numerics::{
+        div::DivChip,
         dot::DotChip,
         numeric::{Numeric, NumericConfig, NumericType},
     },
@@ -30,6 +31,7 @@ impl<F: PrimeField> GemmChip<F> {
     // This function is used for non-circuit forward
     pub fn forward(
         inputs: &Vec<Tensor>,
+        numeric_config: &NumericConfig,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<Tensor>, ShapeError> {
         let input = &inputs[0];
@@ -40,8 +42,9 @@ impl<F: PrimeField> GemmChip<F> {
 
         let input = input.clone().into_shape(input_shape)?;
         let weight = weight.clone().into_shape(weight_shape)?;
+        let output = input.dot(&weight) / numeric_config.scale_factor as i64;
 
-        Ok(vec![input.dot(&weight).into_dyn()])
+        Ok(vec![output.into_dyn()])
     }
 
     // This function is used for non-circuit backward
@@ -81,10 +84,16 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
 
         // Get constants
         let zero = constants.get(&0).unwrap().clone();
-        let constants = vec![zero.as_ref()];
+        let one = constants.get(&1).unwrap().clone();
+        let sf = constants
+            .get(&(self.numeric_config.scale_factor as i64))
+            .unwrap()
+            .clone();
+        let constants = vec![zero.as_ref(), one.as_ref(), sf.as_ref()];
 
         // Initialize dot chip
         let dot_chip = DotChip::construct(self.numeric_config.clone());
+        let div_chip = DivChip::construct(self.numeric_config.clone());
 
         // Forward pass
         let mut outputs = vec![];
@@ -113,12 +122,25 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
             }
         }
 
+        println!("pass dot");
+
+        // Divide by scale factor
+        let outputs = match div_chip.forward(
+            layouter.namespace(|| "div"),
+            &vec![outputs.iter().collect::<Vec<_>>(), vec![sf.as_ref(); outputs.len()]],
+            &constants,
+        ) {
+            Ok(output) => output,
+            Err(e) => panic!("Error in GemmChip.div_chip: {:?}", e),
+        };
+        println!("pass div");
+
         Ok(vec![Array::from_shape_vec(
             IxDyn(&[input_shape[0], weight_shape[1]]),
             outputs.into_iter().map(|x| Rc::new(x)).collect(),
         )?])
     }
-    
+
     fn backward(
         &self,
         _layouter: impl Layouter<F>,
@@ -132,6 +154,6 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
 
 impl<F: PrimeField> NumericConsumer for GemmChip<F> {
     fn used_numerics(&self) -> Vec<NumericType> {
-        vec![NumericType::Dot, NumericType::Accumulator]
+        vec![NumericType::Dot, NumericType::Accumulator, NumericType::Div]
     }
 }

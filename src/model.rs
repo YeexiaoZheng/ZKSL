@@ -151,6 +151,7 @@ impl<F: PrimeField> ModelCircuit<F> {
 
     pub fn forward(&self) -> Result<Tensor, ShapeError> {
         let mut tensor_map = self.graph.tensor_map.clone();
+        let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
 
         for node in self.graph.nodes.iter() {
             let operation = match_operation::<F>(match_op_type(node.op_type.clone()));
@@ -160,6 +161,7 @@ impl<F: PrimeField> ModelCircuit<F> {
                     .iter()
                     .map(|x| tensor_map.get(x).unwrap().clone())
                     .collect::<Vec<Tensor>>(),
+                &numeric_config,
                 &node.attributes,
             )?;
             for (op, output) in node.outputs.iter().zip(outputs.into_iter()) {

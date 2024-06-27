@@ -13,6 +13,7 @@ use crate::{
 
 use super::nonlinear::NonLinearNumeric;
 
+// IMPORTANT: It returns Ln(x / scale_factor) * scale_factor
 pub struct LnChip<F: PrimeField> {
     pub numeric_config: Rc<NumericConfig>,
     pub _marker: PhantomData<F>,

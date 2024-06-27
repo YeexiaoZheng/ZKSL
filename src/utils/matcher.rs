@@ -33,7 +33,7 @@ pub fn match_op_type(op_type: String) -> OPType {
 
 pub fn match_operation<F: PrimeField>(
     op_type: OPType,
-) -> fn(&Vec<Tensor>, &HashMap<String, f64>) -> Result<Vec<Tensor>, ShapeError> {
+) -> fn(&Vec<Tensor>, &NumericConfig, &HashMap<String, f64>) -> Result<Vec<Tensor>, ShapeError> {
     match op_type {
         OPType::GEMM => GemmChip::<F>::forward,
         OPType::ReLU => ReLUChip::<F>::forward,

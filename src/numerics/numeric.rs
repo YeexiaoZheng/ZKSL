@@ -123,8 +123,8 @@ pub trait Numeric<F: PrimeField> {
                                 panic!("Error in {} numeric op_row_region: {:?}", self.name(), e)
                             }
                         };
-                    // Check that the outputs' len is 1.
-                    assert_eq!(row_outputs.len(), 1);
+                    // Check that the outputs' len is correct.
+                    assert_eq!(row_outputs.len(), self.num_output_cols_per_row());
                     outputs.extend(row_outputs);
                 }
                 Ok(outputs)

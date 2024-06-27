@@ -35,7 +35,7 @@ pub struct Graph {
 }
 
 impl Graph {
-    pub fn construct(graph_json: GraphJson) -> Self {
+    pub fn construct(graph_json: GraphJson, scale_factor: u64) -> Self {
         Self {
             tensor_map: graph_json
                 .tensor_map
@@ -43,7 +43,15 @@ impl Graph {
                 .map(|(s, tensor)| {
                     (
                         s.clone(),
-                        Tensor::from_shape_vec(IxDyn(&tensor.shape), tensor.data).unwrap(),
+                        Tensor::from_shape_vec(
+                            IxDyn(&tensor.shape),
+                            tensor
+                                .data
+                                .iter()
+                                .map(|x| x * scale_factor as i64)
+                                .collect(),
+                        )
+                        .unwrap(),
                     )
                 })
                 .collect(),

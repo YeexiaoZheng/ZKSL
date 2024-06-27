@@ -27,6 +27,7 @@ impl<F: PrimeField> NoneChip<F> {
     // This function is used for non-circuit forward
     pub fn forward(
         inputs: &Vec<Tensor>,
+        _numeric_config: &NumericConfig,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<Tensor>, ShapeError> {
         Ok(inputs.clone())

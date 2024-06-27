@@ -47,7 +47,7 @@ impl<F: PrimeField> AddChip<F> {
         });
 
         let mut selectors = numeric_config.selectors;
-        selectors.insert(NumericType::Dot, vec![selector]);
+        selectors.insert(NumericType::Add, vec![selector]);
 
         AddConfig {
             columns: numeric_config.columns,
@@ -97,8 +97,8 @@ impl<F: PrimeField> Numeric<F> for AddChip<F> {
 
         // Assign columns
         let mut res = vec![];
-        for i in 0..self.num_cols_per_op() {
-            let offset = i * self.num_cols_per_op();
+        for i in 0..input1.len() {
+            let offset = i * input1.len();
             let in1 = input1[i].copy_advice(|| "", region, columns[offset + 0], row_offset)?;
             let in2 = input2[i].copy_advice(|| "", region, columns[offset + 1], row_offset)?;
             let out = in1.value().copied() + in2.value().copied();

@@ -10,13 +10,13 @@ use zkml::{
 
 fn main() {
     // Load graph
-    let graph = Graph::construct(load_from_json("src/utils/test.json"));
+    let scale_factor = 8;
+    let graph = Graph::construct(load_from_json("src/utils/test.json"), scale_factor);
     println!("{:?}", graph);
     let circuit = ModelCircuit::<Fr>::construct(graph);
 
     // Set numeric config
-    let k = 10;
-    let scale_factor = 1 << 9;
+    let k = 14;
     configure_static_numeric_config(k, 10, scale_factor, circuit.clone().used_numerics.clone());
 
     // Run the circuit
@@ -25,6 +25,6 @@ fn main() {
 
     // Verify the circuit
     let public = output.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
-    let prover = MockProver::run(10, &circuit, vec![public]).unwrap();
+    let prover = MockProver::run(14, &circuit, vec![public]).unwrap();
     assert_eq!(prover.verify(), Ok(()));
 }

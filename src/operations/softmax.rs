@@ -17,6 +17,7 @@ use crate::{
 
 use super::operation::{NumericConsumer, Operation};
 
+// IMPORTANT: It returns exp(x^i / scale_factor) * scale_factor / sum(exp(x^i / scale_factor) * scale_factor) * scale_factor
 #[derive(Clone, Debug, Default)]
 pub struct SoftMaxChip<F: PrimeField> {
     pub numeric_config: Rc<NumericConfig>,

@@ -7,6 +7,8 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
+use crate::utils::helpers::{to_field, to_primitive};
+
 use super::numeric::{Numeric, NumericConfig, NumericType};
 
 type DivConfig = NumericConfig;
@@ -25,7 +27,7 @@ impl<F: PrimeField> DivChip<F> {
     }
 
     pub fn num_cols_per_op() -> usize {
-        3
+        4
     }
 
     pub fn configure(meta: &mut ConstraintSystem<F>, numeric_config: NumericConfig) -> DivConfig {
@@ -41,13 +43,14 @@ impl<F: PrimeField> DivChip<F> {
                     let inp1 = meta.query_advice(columns[offset + 0], Rotation::cur());
                     let inp2 = meta.query_advice(columns[offset + 1], Rotation::cur());
                     let outp = meta.query_advice(columns[offset + 2], Rotation::cur());
-                    s.clone() * (inp1 * inp2 - outp)
+                    let bias = meta.query_advice(columns[offset + 3], Rotation::cur());
+                    s.clone() * (inp1 - bias - inp2 * outp)
                 })
                 .collect::<Vec<_>>()
         });
 
         let mut selectors = numeric_config.selectors;
-        selectors.insert(NumericType::Dot, vec![selector]);
+        selectors.insert(NumericType::Div, vec![selector]);
 
         DivConfig {
             columns: numeric_config.columns,
@@ -97,12 +100,21 @@ impl<F: PrimeField> Numeric<F> for DivChip<F> {
 
         // Assign columns
         let mut res = vec![];
-        for i in 0..self.num_cols_per_op() {
-            let offset = i * self.num_cols_per_op();
-            let in1 = input1[i].copy_advice(|| "", region, columns[offset + 0], row_offset)?;
-            let in2 = input2[i].copy_advice(|| "", region, columns[offset + 1], row_offset)?;
-            let out = in1.value().copied() * in2.value().copied();
-            res.push(region.assign_advice(|| "", columns[offset + 2], row_offset, || out)?);
+        for i in 0..input1.len() {
+            let offset = i * input1.len();
+            let in1 = input1[i].copy_advice(|| "assign in1", region, columns[offset + 0], row_offset)?;
+            let in2 = input2[i].copy_advice(|| "assign in2", region, columns[offset + 1], row_offset)?;
+            let out = in1
+                .value()
+                .map(|a| a)
+                .zip(in2.value().map(|b| b))
+                .map(|(a, b)| to_field::<F>(to_primitive::<F>(a) / to_primitive::<F>(b)));
+            let out = region.assign_advice(|| "assign out", columns[offset + 2], row_offset, || out)?;
+            let bias = in1.value().copied() - in2.value().copied() * out.value().copied();
+            // println!("out: {:?}", out);
+            // println!("bias: {:?}", bias);
+            region.assign_advice(|| "assign bias", columns[offset + 3], row_offset, || bias)?;
+            res.push(out);
         }
 
         Ok(res)
@@ -120,12 +132,12 @@ impl<F: PrimeField> Numeric<F> for DivChip<F> {
         assert_eq!(input1.len(), input2.len());
         let input_len = input1.len();
         let cols_per_row = self.num_input_cols_per_row();
-        let zero = constants[0];
+        let one = constants[1];
 
         // Fill the input and weight columns to be multiple of num_input_cols_per_row
         while input1.len() % cols_per_row != 0 {
-            input1.push(&zero);
-            input2.push(&zero);
+            input1.push(&one);
+            input2.push(&one);
         }
 
         // Assign columns row by row
