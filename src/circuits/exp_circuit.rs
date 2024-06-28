@@ -8,10 +8,14 @@ use halo2_proofs::{
 
 use crate::{
     numerics::{
-        nonlinear::exp::ExpChip,
-        numeric::{Numeric, NumericConfig},
+        lookups::field_lookup::FieldLookUpChip,
+        nonlinear::{exp::ExpChip, relu::ReluChip},
+        numeric::{Numeric, NumericConfig, NumericType},
     },
-    utils::helpers::{to_field, CellRc, NUMERIC_CONFIG},
+    utils::{
+        helpers::{to_field, CellRc, NUMERIC_CONFIG},
+        matcher::match_load_lookups,
+    },
 };
 
 #[derive(Clone, Debug)]
@@ -22,13 +26,12 @@ pub struct ExpConfig<F: PrimeField> {
 }
 
 pub struct ExpCircuit<F: PrimeField> {
-    pub input1: Vec<F>,
-    pub input2: Vec<F>,
+    pub input: Vec<F>,
 }
 
 impl<F: PrimeField> ExpCircuit<F> {
-    pub fn construct(input1: Vec<F>, input2: Vec<F>) -> Self {
-        Self { input1, input2 }
+    pub fn construct(input: Vec<F>) -> Self {
+        Self { input }
     }
 
     pub fn assign_tensor(
@@ -38,7 +41,7 @@ impl<F: PrimeField> ExpCircuit<F> {
         input: &Vec<F>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         Ok(layouter.assign_region(
-            || "assign_tensors",
+            || "assign input",
             |mut region| {
                 let mut cell_idx = 0;
                 input
@@ -122,7 +125,9 @@ impl<F: PrimeField> Circuit<F> for ExpCircuit<F> {
         };
 
         // Configure numeric chips
+        let numeric_config = FieldLookUpChip::<F>::configure(meta, numeric_config);
         let numeric_config = ExpChip::<F>::configure(meta, numeric_config);
+        let numeric_config = ReluChip::<F>::configure(meta, numeric_config);
 
         // Create public column
         let public = meta.instance_column();
@@ -142,23 +147,36 @@ impl<F: PrimeField> Circuit<F> for ExpCircuit<F> {
     ) -> Result<(), ErrorFront> {
         // Construct Exp chip
         let config_rc = config.numeric_config.clone();
-        let exp_chip = ExpChip::<F>::construct(config_rc.clone());
+        let exp_chip = ReluChip::<F>::construct(config_rc.clone());
 
-        // Assign input and weight tensors
-        let input1 = self
+        // Assign input tensors
+        let input = self
             .assign_tensor(
                 layouter.namespace(|| "assign_inputs"),
                 &exp_chip.config.columns,
-                &self.input1,
+                &self.input,
             )
             .unwrap();
-        let input2 = self
-            .assign_tensor(
-                layouter.namespace(|| "assign_weights"),
-                &exp_chip.config.columns,
-                &self.input2,
-            )
-            .unwrap();
+
+        // Load lookups
+        match_load_lookups(
+            config.numeric_config.clone(),
+            NumericType::FieldLookUp,
+            layouter.namespace(|| "load field lookups"),
+        )
+        .unwrap();
+        match_load_lookups(
+            config.numeric_config.clone(),
+            NumericType::Relu,
+            layouter.namespace(|| "load relu lookups"),
+        )
+        .unwrap();
+        match_load_lookups(
+            config.numeric_config.clone(),
+            NumericType::Exp,
+            layouter.namespace(|| "load exp lookups"),
+        )
+        .unwrap();
 
         // Assign constants
         let constants = self
@@ -169,11 +187,14 @@ impl<F: PrimeField> Circuit<F> for ExpCircuit<F> {
         let outputs = exp_chip
             .forward(
                 layouter.namespace(|| "Exp"),
-                &vec![input1.iter().collect(), input2.iter().collect()],
-                &constants.values().into_iter().map(|x| x.as_ref()).collect(),
+                &vec![input.iter().collect()],
+                &vec![
+                    constants.get(&0).unwrap().as_ref(),
+                    constants.get(&1).unwrap().as_ref(),
+                ],
             )
             .unwrap();
-        // println!("outputs: {:?}", outputs);
+        println!("outputs: {:#?}", outputs);
 
         // Constrain public output
         let mut public_layouter = layouter.namespace(|| "public");

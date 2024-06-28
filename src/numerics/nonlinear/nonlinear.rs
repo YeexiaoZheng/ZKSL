@@ -48,7 +48,8 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         numeric_config: NumericConfig,
         numeric_type: NumericType,
     ) -> NumericConfig {
-        let s = meta.complex_selector();
+        println!("Configuring non-linear chip, numeric_type: {:?}", numeric_type);
+        let selector = meta.complex_selector();
         let cols_per_op = NUM_LOOKUP_COLS_PER_OP;
         let columns = numeric_config.columns;
 
@@ -62,7 +63,7 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         for op_idx in 0..columns.len() / cols_per_op {
             let offset = op_idx * cols_per_op;
             meta.lookup("non-linear lookup", |meta| {
-                let s = meta.query_selector(s);
+                let s = meta.query_selector(selector);
                 let input_col = meta.query_advice(columns[offset + 0], Rotation::cur());
                 let output_col = meta.query_advice(columns[offset + 1], Rotation::cur());
                 vec![
@@ -73,7 +74,7 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         }
 
         let mut selectors = numeric_config.selectors;
-        selectors.insert(numeric_type, vec![s]);
+        selectors.insert(numeric_type, vec![selector]);
 
         tables.insert(numeric_type, vec![input_lookup, output_lookup]);
 
@@ -97,6 +98,7 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
     fn load_lookups(&self, mut layouter: impl Layouter<F>) -> Result<(), Error> {
         let config = self.get_numeric_config();
         let numeric_type = self.get_numeric_type();
+        println!("Loading non-linear lookups, numeric_type: {:?}", numeric_type);
         let output_lookup = config.tables.get(&numeric_type).unwrap()[1];
 
         layouter.assign_table(
@@ -130,8 +132,12 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         let input = &inputs[0];
 
         if numeric_config.use_selectors {
+            let numeric_type = self.get_numeric_type();
+            println!("Computing non-linear row, numeric_type: {:?}", numeric_type);
+            println!("selectors: {:?}", numeric_config.selectors);
             let selector = self.get_selector();
             selector.enable(region, row_offset)?;
+            println!("selector: {:?}", selector);
         }
 
         input

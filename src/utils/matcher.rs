@@ -46,6 +46,7 @@ pub fn match_operation<F: PrimeField>(
     match op_type {
         OPType::GEMM => GemmChip::<F>::forward,
         OPType::ReLU => ReLUChip::<F>::forward,
+        OPType::SoftMax => SoftMaxChip::<F>::forward,
         _ => NoneChip::<F>::forward,
     }
 }

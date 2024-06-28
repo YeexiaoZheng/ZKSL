@@ -8,17 +8,12 @@ use zkml::{
 
 fn main() {
     // original vector
-    let v_input1: Vec<i64> = vec![10; 3];
-    let v_input2: Vec<i64> = vec![3; 3];
-    let v_output: Vec<i64> = vec![3; 3];
-    // [10, 10, 10] / [3, 3, 3] = [3, 3, 3]
+    let v_input: Vec<i64> = vec![10; 1];
+    let v_output: Vec<i64> = vec![10; 1];
+    println!("{}", 1 << 17);
 
     // field vector
-    let f_input1 = v_input1
-        .iter()
-        .map(|x| to_field::<Fr>(*x))
-        .collect::<Vec<_>>();
-    let f_input2 = v_input2
+    let f_input = v_input
         .iter()
         .map(|x| to_field::<Fr>(*x))
         .collect::<Vec<_>>();
@@ -27,12 +22,12 @@ fn main() {
         .map(|x| to_field::<Fr>(*x))
         .collect::<Vec<_>>();
 
-    let circuit = ExpCircuit::construct(f_input1, f_input2);
+    let circuit = ExpCircuit::construct(f_input);
 
-    let k = 10;
+    let k = 6;
     let scale_factor = 1;
 
-    configure_static_numeric_config(k, 12, scale_factor, BTreeSet::new());
+    configure_static_numeric_config(k, 2, scale_factor, BTreeSet::new());
 
     let prover = MockProver::run(k as u32, &circuit, vec![f_output]).unwrap();
 
