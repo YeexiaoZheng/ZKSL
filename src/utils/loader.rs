@@ -33,7 +33,7 @@ pub fn load_from_json(_file_path: &str) -> GraphJson {
         "tensor_map": {
             "input": {
                 "shape": [1, 10], 
-                "data": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                "data": [-1, -1, 1, 1, 1, 1, 1, 1, 1, 1]
             },
             "mlp1.weight": {
                 "shape": [10, 10], 

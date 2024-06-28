@@ -6,7 +6,10 @@ use halo2_proofs::{
     plonk::{ConstraintSystem, Error},
 };
 
-use crate::{numerics::numeric::{Numeric, NumericConfig, NumericType}, utils::math::relu};
+use crate::{
+    numerics::numeric::{Numeric, NumericConfig, NumericType},
+    utils::math::relu,
+};
 
 use super::nonlinear::NonLinearNumeric;
 

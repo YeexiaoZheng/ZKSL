@@ -7,7 +7,7 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
-use super::numeric::{Numeric, NumericType, NumericConfig};
+use super::numeric::{Numeric, NumericConfig, NumericType};
 
 type AccumulatorConfig = NumericConfig;
 

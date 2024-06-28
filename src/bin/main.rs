@@ -10,7 +10,7 @@ use zkml::{
 
 fn main() {
     // Load graph
-    let scale_factor = 8;
+    let scale_factor = 64;
     let graph = Graph::construct(load_from_json("src/utils/test.json"), scale_factor);
     println!("{:?}", graph);
     let circuit = ModelCircuit::<Fr>::construct(graph);

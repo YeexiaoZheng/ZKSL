@@ -44,7 +44,7 @@ impl<F: PrimeField> Operation<F> for NoneChip<F> {
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         Ok(vec![])
     }
-    
+
     fn backward(
         &self,
         _layouter: impl Layouter<F>,

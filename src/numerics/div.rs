@@ -13,6 +13,7 @@ use super::numeric::{Numeric, NumericConfig, NumericType};
 
 type DivConfig = NumericConfig;
 
+// IMPORTANT: Please use div chip every time you need to multiply first input by scale_factor
 pub struct DivChip<F: PrimeField> {
     pub config: Rc<DivConfig>,
     _marker: PhantomData<F>,
@@ -102,16 +103,32 @@ impl<F: PrimeField> Numeric<F> for DivChip<F> {
         let mut res = vec![];
         for i in 0..input1.len() {
             let offset = i * self.num_cols_per_op();
-            let in1 = input1[i].copy_advice(|| "assign in1", region, columns[offset + 0], row_offset)?;
-            let in2 = input2[i].copy_advice(|| "assign in2", region, columns[offset + 1], row_offset)?;
+            let in1 =
+                input1[i].copy_advice(|| "assign in1", region, columns[offset + 0], row_offset)?;
+            let in2 =
+                input2[i].copy_advice(|| "assign in2", region, columns[offset + 1], row_offset)?;
             let out = in1
                 .value()
                 .map(|a| a)
                 .zip(in2.value().map(|b| b))
-                .map(|(a, b)| to_field::<F>(to_primitive::<F>(a) / to_primitive::<F>(b)));
-            let out = region.assign_advice(|| "assign out", columns[offset + 2], row_offset, || out)?;
+                .map(|(a, b)| {
+                    let a = to_primitive::<F>(a);
+                    let mut b = to_primitive::<F>(b);
+                    if b == 0 {
+                        println!("Warning!: divide by zero! now change divisor to 1");
+                        b = 1;
+                    }
+                    to_field::<F>(a / b)
+                });
+            let out =
+                region.assign_advice(|| "assign out", columns[offset + 2], row_offset, || out)?;
             let reminder = in1.value().copied() - in2.value().copied() * out.value().copied();
-            region.assign_advice(|| "assign reminder", columns[offset + 3], row_offset, || reminder)?;
+            region.assign_advice(
+                || "assign reminder",
+                columns[offset + 3],
+                row_offset,
+                || reminder,
+            )?;
             res.push(out);
         }
 

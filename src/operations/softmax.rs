@@ -98,7 +98,7 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
             &acc_chip,
             layouter.namespace(|| "Accumulator forward"),
             &vec![exp_out.iter().collect()],
-            &vec![],
+            &vec![zero.as_ref()],
         ) {
             Ok(output) => output,
             Err(_) => panic!("Accumulator forward failed"),
@@ -107,9 +107,9 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
 
         let exp_scaled = match Numeric::forward(
             &mul_chip,
-            layouter.namespace(|| "Exp forward"),
+            layouter.namespace(|| "Mul forward"),
             &vec![exp_out.iter().collect(), vec![sf.as_ref(); input.len()]],
-            &vec![],
+            &vec![zero.as_ref()],
         ) {
             Ok(output) => output,
             Err(_) => panic!("Mul forward failed"),

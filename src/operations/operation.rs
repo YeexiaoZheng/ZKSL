@@ -3,7 +3,10 @@ use std::{collections::HashMap, hash::Hash};
 use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
 use ndarray::ShapeError;
 
-use crate::{numerics::numeric::NumericType, utils::helpers::{AssignedTensor, AssignedTensorRef, CellRc}};
+use crate::{
+    numerics::numeric::NumericType,
+    utils::helpers::{AssignedTensor, AssignedTensorRef, CellRc},
+};
 
 #[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq)]
 pub enum OPType {

@@ -22,7 +22,7 @@ pub enum NumericType {
     Accumulator,
     Relu,
     Exp,
-    Ln
+    Ln,
 }
 
 #[derive(Clone, Debug, Default)]
