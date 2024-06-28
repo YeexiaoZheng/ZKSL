@@ -122,8 +122,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
             }
         }
 
-        println!("pass dot");
-        // Divide by scale factor
+        // Divide by scale factor because the output is scaled by scale factor * scale factor
         let outputs = match div_chip.forward(
             layouter.namespace(|| "div"),
             &vec![
@@ -135,7 +134,6 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
             Ok(output) => output,
             Err(e) => panic!("Error in GemmChip.div_chip: {:?}", e),
         };
-        println!("pass div");
 
         Ok(vec![Array::from_shape_vec(
             IxDyn(&[input_shape[0], weight_shape[1]]),

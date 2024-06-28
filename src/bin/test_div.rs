@@ -141,7 +141,7 @@ impl<F: PrimeField> Circuit<F> for DivCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), ErrorFront> {
-        // Construct dot chip
+        // Construct div chip
         let config_rc = config.numeric_config.clone();
         let div_chip = DivChip::<F>::construct(config_rc.clone());
 
@@ -174,7 +174,7 @@ impl<F: PrimeField> Circuit<F> for DivCircuit<F> {
                 &constants.values().into_iter().map(|x| x.as_ref()).collect(),
             )
             .unwrap();
-        println!("outputs: {:?}", outputs);
+        // println!("outputs: {:?}", outputs);
 
         // Constrain public output
         let mut public_layouter = layouter.namespace(|| "public");
@@ -188,9 +188,10 @@ impl<F: PrimeField> Circuit<F> for DivCircuit<F> {
 
 fn main() {
     // original vector
-    let v_input1: Vec<i64> = vec![10; 1];
-    let v_input2: Vec<i64> = vec![3; 1];
-    let v_output: Vec<i64> = vec![3; 1];
+    let v_input1: Vec<i64> = vec![10; 3];
+    let v_input2: Vec<i64> = vec![3; 3];
+    let v_output: Vec<i64> = vec![3; 3];
+    // [10, 10, 10] / [3, 3, 3] = [3, 3, 3]
 
     // field vector
     let f_input1 = v_input1
@@ -217,7 +218,7 @@ fn main() {
         k,
         scale_factor,
         num_rows: (1 << k) - 10 + 1,
-        num_cols: 4,
+        num_cols: 12,
         use_selectors: true,
         ..cloned
     };

@@ -84,7 +84,7 @@ impl<F: PrimeField> Numeric<F> for DivChip<F> {
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,
         _constants: &Vec<&AssignedCell<F, F>>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
-        // Check input and weight shapes
+        // Check input shapes
         assert_eq!(inputs.len(), 2);
         let input1 = &inputs[0];
         let input2 = &inputs[1];
@@ -101,7 +101,7 @@ impl<F: PrimeField> Numeric<F> for DivChip<F> {
         // Assign columns
         let mut res = vec![];
         for i in 0..input1.len() {
-            let offset = i * input1.len();
+            let offset = i * self.num_cols_per_op();
             let in1 = input1[i].copy_advice(|| "assign in1", region, columns[offset + 0], row_offset)?;
             let in2 = input2[i].copy_advice(|| "assign in2", region, columns[offset + 1], row_offset)?;
             let out = in1
@@ -111,7 +111,7 @@ impl<F: PrimeField> Numeric<F> for DivChip<F> {
                 .map(|(a, b)| to_field::<F>(to_primitive::<F>(a) / to_primitive::<F>(b)));
             let out = region.assign_advice(|| "assign out", columns[offset + 2], row_offset, || out)?;
             let reminder = in1.value().copied() - in2.value().copied() * out.value().copied();
-            region.assign_advice(|| "assign bias", columns[offset + 3], row_offset, || reminder)?;
+            region.assign_advice(|| "assign reminder", columns[offset + 3], row_offset, || reminder)?;
             res.push(out);
         }
 
