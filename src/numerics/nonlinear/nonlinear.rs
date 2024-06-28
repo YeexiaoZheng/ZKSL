@@ -15,6 +15,10 @@ use crate::{
 const NUM_LOOKUP_COLS_PER_OP: usize = 2;
 
 pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
+    fn num_cols_per_op() -> usize {
+        NUM_LOOKUP_COLS_PER_OP
+    }
+
     fn generate_map(scale_factor: u64, min_val: i64, num_rows: i64) -> HashMap<i64, i64>;
 
     fn get_numeric_config(&self) -> Rc<NumericConfig>;
@@ -133,7 +137,14 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         input
             .iter()
             .enumerate()
-            .map(|(i, cell)| cell.copy_advice(|| "", region, columns[i * 2], row_offset))
+            .map(|(i, cell)| {
+                cell.copy_advice(
+                    || "",
+                    region,
+                    columns[i * NUM_LOOKUP_COLS_PER_OP],
+                    row_offset,
+                )
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let res = input
@@ -143,27 +154,15 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
                 let value = cell
                     .value()
                     .map(|x| to_field::<F>(self.get_val_in_map(to_primitive::<F>(x))));
-                region.assign_advice(|| "non-linear", columns[i * 2 + 1], row_offset, || value)
+                region.assign_advice(
+                    || "non-linear",
+                    columns[i * NUM_LOOKUP_COLS_PER_OP + 1],
+                    row_offset,
+                    || value,
+                )
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(res)
-    }
-
-    // Forward pass for the numeric operation.
-    fn forward(
-        &self,
-        mut layouter: impl Layouter<F>,
-        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
-        constants: &Vec<&AssignedCell<F, F>>,
-    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
-        if inputs[0].len() % self.num_input_cols_per_row() != 0 {
-            panic!("Input columns in {} chip are not aligned, please override the forward function to handle this case.", self.name());
-        }
-        self.compute_rows(
-            layouter.namespace(|| format!("{} forward", self.name())),
-            inputs,
-            constants,
-        )
     }
 }

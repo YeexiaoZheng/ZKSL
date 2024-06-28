@@ -19,6 +19,7 @@ use crate::{
         none::NoneChip,
         operation::{OPType, Operation},
         relu::ReLUChip,
+        softmax::SoftMaxChip,
     },
     utils::{
         helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
@@ -278,6 +279,13 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
                     &constants,
                     &op.attributes,
                 ),
+                OPType::SoftMax => SoftMaxChip::<F>::construct(config.numeric_config.clone())
+                    .forward(
+                        layouter.namespace(|| op.op_type.clone()),
+                        &inputs,
+                        &constants,
+                        &op.attributes,
+                    ),
                 OPType::None => NoneChip::<F>::construct(config.numeric_config.clone()).forward(
                     layouter.namespace(|| op.op_type.clone()),
                     &inputs,

@@ -24,6 +24,7 @@ use crate::{
         none::NoneChip,
         operation::{NumericConsumer, OPType},
         relu::ReLUChip,
+        softmax::SoftMaxChip,
     },
 };
 
@@ -32,8 +33,8 @@ use super::helpers::Tensor;
 pub fn match_op_type(op_type: String) -> OPType {
     match op_type.as_str() {
         "Gemm" => OPType::GEMM,
-        "ReLU" => OPType::ReLU,
-        "SoftMax" => OPType::SoftMax,
+        "Relu" => OPType::ReLU,
+        "Softmax" => OPType::SoftMax,
         "None" => OPType::None,
         _ => OPType::None,
     }
@@ -76,7 +77,7 @@ pub fn match_consumer<F: PrimeField>(op_type: OPType) -> Box<dyn NumericConsumer
             Box::new(ReLUChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
         }
         OPType::SoftMax => {
-            Box::new(NoneChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
+            Box::new(SoftMaxChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>
         }
         _ => Box::new(NoneChip::<F>::construct(Default::default())) as Box<dyn NumericConsumer>,
     }
@@ -99,6 +100,9 @@ pub fn match_load_lookups<F: PrimeField>(
             .load_lookups(layouter.namespace(|| "relu lookup")),
         NumericType::Exp => ExpChip::<F>::construct(numeric_config)
             .load_lookups(layouter.namespace(|| "exp lookup")),
+        NumericType::Ln => {
+            LnChip::<F>::construct(numeric_config).load_lookups(layouter.namespace(|| "ln lookup"))
+        }
         _ => Ok(()),
     }
 }

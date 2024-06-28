@@ -11,8 +11,12 @@ use crate::{
 #[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq)]
 pub enum OPType {
     GEMM,
+    Conv,
     ReLU,
     SoftMax,
+    Constant,
+    Reshape,
+    Concat,
     #[default]
     None,
 }

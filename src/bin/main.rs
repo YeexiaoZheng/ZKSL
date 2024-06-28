@@ -10,13 +10,13 @@ use zkml::{
 
 fn main() {
     // Load graph
-    let scale_factor = 64;
-    let graph = Graph::construct(load_from_json("src/utils/test.json"), scale_factor);
-    println!("{:?}", graph);
+    let scale_factor = 128;
+    let graph = Graph::construct(load_from_json("jsons/mlp2.json"), scale_factor);
+    // println!("{:?}", graph);
     let circuit = ModelCircuit::<Fr>::construct(graph);
 
     // Set numeric config
-    let k = 14;
+    let k = 12;
     configure_static_numeric_config(k, 12, scale_factor, circuit.clone().used_numerics.clone());
 
     // Run the circuit

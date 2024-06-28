@@ -5,8 +5,8 @@ use ndarray::{Array, ShapeError};
 
 use crate::{
     numerics::{
-        nonlinear::{nonlinear::NonLinearNumeric, relu::ReluChip},
-        numeric::{NumericConfig, NumericType},
+        nonlinear::relu::ReluChip,
+        numeric::{Numeric, NumericConfig, NumericType},
     },
     utils::{
         helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
@@ -54,15 +54,18 @@ impl<F: PrimeField> Operation<F> for ReLUChip<F> {
         &self,
         layouter: impl Layouter<F>,
         inputs: &Vec<AssignedTensorRef<F>>,
-        _constants: &HashMap<i64, CellRc<F>>,
+        constants: &HashMap<i64, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         let relu_chip = ReluChip::<F>::construct(self.numeric_config.clone());
         let input = inputs[0].clone();
+        let zero = constants.get(&0).unwrap().clone();
+        let one = constants.get(&1).unwrap().clone();
+
         let output = match relu_chip.forward(
             layouter,
             &vec![input.iter().map(|x| x.as_ref()).collect::<Vec<_>>()],
-            &vec![],
+            &vec![zero.as_ref(), one.as_ref()],
         ) {
             Ok(output) => output,
             Err(_) => panic!("ReLU forward failed"),

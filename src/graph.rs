@@ -48,7 +48,7 @@ impl Graph {
                             tensor
                                 .data
                                 .iter()
-                                .map(|x| x * scale_factor as i64)
+                                .map(|x| (x * scale_factor as f64) as i64)
                                 .collect(),
                         )
                         .unwrap(),

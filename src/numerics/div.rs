@@ -115,7 +115,7 @@ impl<F: PrimeField> Numeric<F> for DivChip<F> {
                     let a = to_primitive::<F>(a);
                     let mut b = to_primitive::<F>(b);
                     if b == 0 {
-                        println!("Warning!: divide by zero! now change divisor to 1");
+                        println!("Warning: divide by zero! now change divisor to 1");
                         b = 1;
                     }
                     to_field::<F>(a / b)

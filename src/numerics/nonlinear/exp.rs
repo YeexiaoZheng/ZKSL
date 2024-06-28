@@ -15,14 +15,14 @@ use super::nonlinear::NonLinearNumeric;
 
 // IMPORTANT: It returns exp(x / scale_factor) * scale_factor
 pub struct ExpChip<F: PrimeField> {
-    pub numeric_config: Rc<NumericConfig>,
+    pub config: Rc<NumericConfig>,
     pub _marker: PhantomData<F>,
 }
 
 impl<F: PrimeField> ExpChip<F> {
-    pub fn construct(numeric_config: Rc<NumericConfig>) -> Self {
+    pub fn construct(config: Rc<NumericConfig>) -> Self {
         Self {
-            numeric_config,
+            config,
             _marker: PhantomData,
         }
     }
@@ -47,7 +47,7 @@ impl<F: PrimeField> NonLinearNumeric<F> for ExpChip<F> {
     }
 
     fn get_numeric_config(&self) -> Rc<NumericConfig> {
-        self.numeric_config.clone()
+        self.config.clone()
     }
 
     fn get_numeric_type(&self) -> NumericType {
@@ -61,11 +61,15 @@ impl<F: PrimeField> Numeric<F> for ExpChip<F> {
     }
 
     fn num_cols_per_op(&self) -> usize {
-        todo!()
+        <Self as NonLinearNumeric<F>>::num_cols_per_op()
     }
 
     fn num_input_cols_per_row(&self) -> usize {
-        todo!()
+        self.config.columns.len() / self.num_cols_per_op()
+    }
+
+    fn num_output_cols_per_row(&self) -> usize {
+        self.config.columns.len() / self.num_cols_per_op()
     }
 
     fn compute_row(
@@ -76,5 +80,28 @@ impl<F: PrimeField> Numeric<F> for ExpChip<F> {
         constants: &Vec<&AssignedCell<F, F>>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         <Self as NonLinearNumeric<F>>::compute_row(&self, region, row_offset, inputs, constants)
+    }
+
+    fn forward(
+        &self,
+        mut layouter: impl halo2_proofs::circuit::Layouter<F>,
+        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
+        constants: &Vec<&AssignedCell<F, F>>,
+    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
+        let zero = constants[0];
+        let _one = constants[1];
+        let mut input = inputs[0].clone();
+        let input_len = input.len();
+        while input.len() % self.num_input_cols_per_row() != 0 {
+            input.push(zero);
+        }
+        match self.compute_rows(
+            layouter.namespace(|| "Exp forward"),
+            &vec![input],
+            constants,
+        ) {
+            Ok(outputs) => Ok(outputs[0..input_len].to_vec()),
+            Err(e) => panic!("Error in Exp forward compute rows: {}", e),
+        }
     }
 }

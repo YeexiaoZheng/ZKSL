@@ -8,7 +8,7 @@ use crate::{
         accumulator::AccumulatorChip,
         div::DivChip,
         mul::MulChip,
-        nonlinear::{exp::ExpChip, nonlinear::NonLinearNumeric},
+        nonlinear::exp::ExpChip,
         numeric::{Numeric, NumericConfig, NumericType},
     },
     utils::{
@@ -84,18 +84,16 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
         let div_chip = DivChip::<F>::construct(self.numeric_config.clone());
         let acc_chip = AccumulatorChip::<F>::construct(self.numeric_config.clone());
 
-        let exp_out = match NonLinearNumeric::forward(
-            &exp_chip,
+        let exp_out = match exp_chip.forward(
             layouter.namespace(|| "Exp forward"),
             &vec![input.iter().map(|x| x.as_ref()).collect::<Vec<_>>()],
-            &vec![],
+            &vec![zero.as_ref(), one.as_ref()],
         ) {
             Ok(output) => output,
             Err(_) => panic!("Exp forward failed"),
         };
 
-        let exp_sum = match Numeric::forward(
-            &acc_chip,
+        let exp_sum = match acc_chip.forward(
             layouter.namespace(|| "Accumulator forward"),
             &vec![exp_out.iter().collect()],
             &vec![zero.as_ref()],
@@ -105,8 +103,7 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
         };
         let exp_sum = &exp_sum[0];
 
-        let exp_scaled = match Numeric::forward(
-            &mul_chip,
+        let exp_scaled = match mul_chip.forward(
             layouter.namespace(|| "Mul forward"),
             &vec![exp_out.iter().collect(), vec![sf.as_ref(); input.len()]],
             &vec![zero.as_ref()],
@@ -115,8 +112,7 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
             Err(_) => panic!("Mul forward failed"),
         };
 
-        let output = match Numeric::forward(
-            &div_chip,
+        let output = match div_chip.forward(
             layouter.namespace(|| "Div forward"),
             &vec![exp_scaled.iter().collect(), vec![&exp_sum; input.len()]],
             &vec![zero.as_ref(), one.as_ref()],
@@ -144,6 +140,12 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
 
 impl<F: PrimeField> NumericConsumer for SoftMaxChip<F> {
     fn used_numerics(&self) -> Vec<NumericType> {
-        vec![NumericType::FieldLookUp, NumericType::Exp]
+        vec![
+            NumericType::FieldLookUp,
+            NumericType::Exp,
+            NumericType::Mul,
+            NumericType::Accumulator,
+            NumericType::Div,
+        ]
     }
 }

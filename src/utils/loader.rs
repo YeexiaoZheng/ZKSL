@@ -1,10 +1,12 @@
+use std::{fs::File, io::BufReader};
+
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, DisplayFromStr, Map};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TensorJson {
     pub shape: Vec<usize>,
-    pub data: Vec<i64>,
+    pub data: Vec<f64>,
 }
 
 #[serde_as]
@@ -27,48 +29,10 @@ pub struct GraphJson {
     pub output_shape: Vec<usize>,
 }
 
-pub fn load_from_json(_file_path: &str) -> GraphJson {
-    let tmp_json = r#"
-    {
-        "tensor_map": {
-            "input": {
-                "shape": [1, 10], 
-                "data": [-1, -1, 1, 1, 1, 1, 1, 1, 1, 1]
-            },
-            "mlp1.weight": {
-                "shape": [10, 10], 
-                "data": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-            },
-            "mlp2.weight": {
-                "shape": [10, 2],
-                "data": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-            }
-        },
-        "nodes": [
-            {
-                "op_type": "Gemm",
-                "inputs": ["input", "mlp1.weight"],
-                "outputs": ["/mlp1/Gemm_output_0"],
-                "attributes": {"alpha": 1.0, "beta": 1.0, "transB": 1}
-            },
-            {
-                "op_type": "ReLU",
-                "inputs": ["/mlp1/Gemm_output_0"],
-                "outputs": ["/relu/output_0"],
-                "attributes": {}
-            },
-            {
-                "op_type": "Gemm",
-                "inputs": ["/relu/output_0", "mlp2.weight"],
-                "outputs": ["output"],
-                "attributes": {"alpha": 1.0, "beta": 1.0, "transB": 1}
-            }
-        ],
-        "input_shape": [1, 10],
-        "output_shape": [1, 2]
-    }
-    "#;
-    match serde_json::from_str(tmp_json) {
+pub fn load_from_json(file_path: &str) -> GraphJson {
+    let file = File::open(file_path).unwrap();
+    let reader = BufReader::new(file);
+    match serde_json::from_reader(reader) {
         Ok(graph_json) => graph_json,
         Err(e) => {
             eprintln!("Error: {}", e);
