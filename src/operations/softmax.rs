@@ -5,12 +5,14 @@ use ndarray::{Array, ShapeError};
 
 use crate::{
     numerics::{
-        accumulator,
+        accumulator::AccumulatorChip,
+        div::DivChip,
+        mul::MulChip,
         nonlinear::{exp::ExpChip, nonlinear::NonLinearNumeric},
         numeric::{Numeric, NumericConfig, NumericType},
     },
     utils::{
-        helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor, NUMERIC_CONFIG},
+        helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
         math::exp,
     },
 };
@@ -35,10 +37,11 @@ impl<F: PrimeField> SoftMaxChip<F> {
     // This function is used for non-circuit forward
     pub fn forward(
         inputs: &Vec<Tensor>,
+        numeric_config: &NumericConfig,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<Tensor>, ShapeError> {
         let input = &inputs[0];
-        let scale_factor = NUMERIC_CONFIG.lock().unwrap().scale_factor;
+        let scale_factor = numeric_config.scale_factor;
 
         let exp_out = input
             .clone()
@@ -64,13 +67,22 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
         &self,
         mut layouter: impl Layouter<F>,
         inputs: &Vec<AssignedTensorRef<F>>,
-        _constants: &HashMap<i64, CellRc<F>>,
+        constants: &HashMap<i64, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         let input = inputs[0].clone();
 
+        let zero = constants.get(&0).unwrap().clone();
+        let one = constants.get(&1).unwrap().clone();
+        let sf = constants
+            .get(&(self.numeric_config.scale_factor as i64))
+            .unwrap()
+            .clone();
+
         let exp_chip = ExpChip::<F>::construct(self.numeric_config.clone());
-        let acc_chip = accumulator::AccumulatorChip::<F>::construct(self.numeric_config.clone());
+        let mul_chip = MulChip::<F>::construct(self.numeric_config.clone());
+        let div_chip = DivChip::<F>::construct(self.numeric_config.clone());
+        let acc_chip = AccumulatorChip::<F>::construct(self.numeric_config.clone());
 
         let exp_out = match NonLinearNumeric::forward(
             &exp_chip,
@@ -85,15 +97,38 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
         let exp_sum = match Numeric::forward(
             &acc_chip,
             layouter.namespace(|| "Accumulator forward"),
-            &vec![exp_out.iter().map(|x| x).collect::<Vec<_>>()],
+            &vec![exp_out.iter().collect()],
             &vec![],
         ) {
             Ok(output) => output,
             Err(_) => panic!("Accumulator forward failed"),
         };
-        let _exp_sum = &exp_sum[0];
+        let exp_sum = &exp_sum[0];
 
-        Ok(vec![])
+        let exp_scaled = match Numeric::forward(
+            &mul_chip,
+            layouter.namespace(|| "Exp forward"),
+            &vec![exp_out.iter().collect(), vec![sf.as_ref(); input.len()]],
+            &vec![],
+        ) {
+            Ok(output) => output,
+            Err(_) => panic!("Mul forward failed"),
+        };
+
+        let output = match Numeric::forward(
+            &div_chip,
+            layouter.namespace(|| "Div forward"),
+            &vec![exp_scaled.iter().collect(), vec![&exp_sum; input.len()]],
+            &vec![zero.as_ref(), one.as_ref()],
+        ) {
+            Ok(output) => output,
+            Err(_) => panic!("Div forward failed"),
+        };
+
+        Ok(vec![Array::from_shape_vec(
+            input.shape(),
+            output.into_iter().map(|x| Rc::new(x)).collect(),
+        )?])
     }
 
     fn backward(
