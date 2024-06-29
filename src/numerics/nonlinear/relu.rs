@@ -39,7 +39,6 @@ impl<F: PrimeField> NonLinearNumeric<F> for ReluChip<F> {
         (0..num_rows)
             .map(|idx| {
                 let x = idx + min_val;
-                // println!("x: {}, relu: {}", x, relu(x));
                 (x, relu(x))
             })
             .collect::<HashMap<_, _>>()

@@ -147,7 +147,7 @@ impl<F: PrimeField> Circuit<F> for ExpCircuit<F> {
     ) -> Result<(), ErrorFront> {
         // Construct Exp chip
         let config_rc = config.numeric_config.clone();
-        let exp_chip = ReluChip::<F>::construct(config_rc.clone());
+        let exp_chip = ExpChip::<F>::construct(config_rc.clone());
 
         // Assign input tensors
         let input = self
@@ -194,7 +194,7 @@ impl<F: PrimeField> Circuit<F> for ExpCircuit<F> {
                 ],
             )
             .unwrap();
-        println!("outputs: {:#?}", outputs);
+        // println!("outputs: {:#?}", outputs);
 
         // Constrain public output
         let mut public_layouter = layouter.namespace(|| "public");

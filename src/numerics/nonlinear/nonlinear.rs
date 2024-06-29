@@ -48,7 +48,6 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         numeric_config: NumericConfig,
         numeric_type: NumericType,
     ) -> NumericConfig {
-        println!("Configuring non-linear chip, numeric_type: {:?}", numeric_type);
         let selector = meta.complex_selector();
         let cols_per_op = NUM_LOOKUP_COLS_PER_OP;
         let columns = numeric_config.columns;
@@ -98,14 +97,22 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
     fn load_lookups(&self, mut layouter: impl Layouter<F>) -> Result<(), Error> {
         let config = self.get_numeric_config();
         let numeric_type = self.get_numeric_type();
-        println!("Loading non-linear lookups, numeric_type: {:?}", numeric_type);
         let output_lookup = config.tables.get(&numeric_type).unwrap()[1];
 
         layouter.assign_table(
             || "non-linear table",
             |mut table| {
                 for i in 0..config.num_rows {
-                    let x = i as i64 + config.min_val;
+                    let mut x = i as i64 + config.min_val;
+                    // TODO: This is a hack to handle the case when x = 0
+                    if x == 0 {
+                        x = match numeric_type {
+                            // Because the permutation argument should let Z(x) != 1 when x = 0
+                            // We need to shift the key by 1
+                            NumericType::Exp => i as i64 + config.min_val - 1,
+                            _ => i as i64 + config.min_val,
+                        };
+                    }
                     let val = to_field::<F>(self.get_val_in_map(x));
                     table.assign_cell(
                         || "non-linear cell",
@@ -128,16 +135,13 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         _constants: &Vec<&AssignedCell<F, F>>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         let numeric_config = self.get_numeric_config();
+        let numeric_type = self.get_numeric_type();
         let columns = &self.get_numeric_config().columns;
         let input = &inputs[0];
 
         if numeric_config.use_selectors {
-            let numeric_type = self.get_numeric_type();
-            println!("Computing non-linear row, numeric_type: {:?}", numeric_type);
-            println!("selectors: {:?}", numeric_config.selectors);
             let selector = self.get_selector();
             selector.enable(region, row_offset)?;
-            println!("selector: {:?}", selector);
         }
 
         input
@@ -157,9 +161,19 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
             .iter()
             .enumerate()
             .map(|(i, cell)| {
-                let value = cell
-                    .value()
-                    .map(|x| to_field::<F>(self.get_val_in_map(to_primitive::<F>(x))));
+                let value = cell.value().map(|x| {
+                    let mut x = to_primitive::<F>(x);
+                    // TODO: This is a hack to handle the case when x = 0
+                    if x == 0 {
+                        x = match numeric_type {
+                            // Because the permutation argument should let Z(x) != 1 when x = 0
+                            // We need to shift the key by 1
+                            NumericType::Exp => x + 1,
+                            _ => x,
+                        };
+                    }
+                    to_field::<F>(self.get_val_in_map(x))
+                });
                 region.assign_advice(
                     || "non-linear",
                     columns[i * NUM_LOOKUP_COLS_PER_OP + 1],

@@ -3,14 +3,19 @@ use std::collections::BTreeSet;
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use zkml::{
     circuits::exp_circuit::ExpCircuit,
-    utils::helpers::{configure_static_numeric_config, to_field},
+    utils::{helpers::{configure_static_numeric_config, to_field}, math::exp},
 };
 
 fn main() {
+    let k = 6;
+    let scale_factor = 1;
+    let num_cols = 2;
+
     // original vector
     let v_input: Vec<i64> = vec![10; 1];
-    let v_output: Vec<i64> = vec![10; 1];
-    println!("{}", 1 << 17);
+    let v_output: Vec<i64> = v_input.iter().map(|x| exp(*x, scale_factor)).collect();
+    println!("v_input: {:?}", v_input);
+    println!("v_output: {:?}", v_output);
 
     // field vector
     let f_input = v_input
@@ -24,10 +29,7 @@ fn main() {
 
     let circuit = ExpCircuit::construct(f_input);
 
-    let k = 6;
-    let scale_factor = 1;
-
-    configure_static_numeric_config(k, 2, scale_factor, BTreeSet::new());
+    configure_static_numeric_config(k, num_cols, scale_factor, BTreeSet::new());
 
     let prover = MockProver::run(k as u32, &circuit, vec![f_output]).unwrap();
 
