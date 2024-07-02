@@ -31,7 +31,12 @@ impl<F: PrimeField> LnChip<F> {
         meta: &mut ConstraintSystem<F>,
         numeric_config: NumericConfig,
     ) -> NumericConfig {
-        Self::_configure(meta, numeric_config, NumericType::Ln, NumericType::FieldLookUp)
+        Self::_configure(
+            meta,
+            numeric_config,
+            NumericType::Ln,
+            NumericType::FieldLookUp,
+        )
     }
 }
 

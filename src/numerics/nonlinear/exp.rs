@@ -31,7 +31,12 @@ impl<F: PrimeField> ExpChip<F> {
         meta: &mut ConstraintSystem<F>,
         numeric_config: NumericConfig,
     ) -> NumericConfig {
-        Self::_configure(meta, numeric_config, NumericType::Exp, NumericType::RowLookUp)
+        Self::_configure(
+            meta,
+            numeric_config,
+            NumericType::Exp,
+            NumericType::RowLookUp,
+        )
     }
 }
 

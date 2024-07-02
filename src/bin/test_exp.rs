@@ -3,7 +3,10 @@ use std::collections::BTreeSet;
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use zkml::{
     circuits::exp_circuit::ExpCircuit,
-    utils::{helpers::{configure_static_numeric_config, to_field}, math::exp},
+    utils::{
+        helpers::{configure_static_numeric_config, to_field},
+        math::exp,
+    },
 };
 
 fn main() {
