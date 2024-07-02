@@ -7,12 +7,12 @@ use crate::{
     numerics::{
         div::DivChip,
         dot::DotChip,
-        numeric::{Numeric, NumericConfig, NumericType},
+        numeric::{Numeric, NumericConfig, NumericConsumer, NumericType},
     },
     utils::helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
 };
 
-use super::operation::{NumericConsumer, Operation};
+use super::operation::Operation;
 
 #[derive(Clone, Debug, Default)]
 pub struct GemmChip<F: PrimeField> {

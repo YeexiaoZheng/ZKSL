@@ -16,15 +16,11 @@ use crate::{
         lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip},
         mul::MulChip,
         nonlinear::{exp::ExpChip, ln::LnChip, nonlinear::NonLinearNumeric, relu::ReluChip},
-        numeric::{NumericConfig, NumericType},
+        numeric::{NumericConfig, NumericConsumer, NumericType},
         sub::SubChip,
     },
     operations::{
-        gemm::GemmChip,
-        none::NoneChip,
-        operation::{NumericConsumer, OPType},
-        relu::ReLUChip,
-        softmax::SoftMaxChip,
+        gemm::GemmChip, none::NoneChip, operation::OPType, relu::ReLUChip, softmax::SoftMaxChip,
     },
 };
 

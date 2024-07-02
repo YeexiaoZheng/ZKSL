@@ -9,7 +9,7 @@ use crate::{
         div::DivChip,
         mul::MulChip,
         nonlinear::exp::ExpChip,
-        numeric::{Numeric, NumericConfig, NumericType},
+        numeric::{Numeric, NumericConfig, NumericConsumer, NumericType},
     },
     utils::{
         helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
@@ -17,7 +17,7 @@ use crate::{
     },
 };
 
-use super::operation::{NumericConsumer, Operation};
+use super::operation::Operation;
 
 // IMPORTANT: It returns exp(x^i / scale_factor) * scale_factor / sum(exp(x^i / scale_factor) * scale_factor) * scale_factor
 #[derive(Clone, Debug, Default)]

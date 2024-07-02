@@ -4,11 +4,11 @@ use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
 use ndarray::ShapeError;
 
 use crate::{
-    numerics::numeric::{NumericConfig, NumericType},
+    numerics::numeric::{NumericConfig, NumericConsumer, NumericType},
     utils::helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
 };
 
-use super::operation::{NumericConsumer, Operation};
+use super::operation::Operation;
 
 #[derive(Clone, Debug, Default)]
 pub struct NoneChip<F: PrimeField> {

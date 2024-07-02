@@ -149,3 +149,7 @@ pub trait Numeric<F: PrimeField> {
         )
     }
 }
+
+pub trait NumericConsumer {
+    fn used_numerics(&self) -> Vec<NumericType>;
+}

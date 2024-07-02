@@ -38,7 +38,3 @@ pub trait Operation<F: PrimeField> {
         attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError>;
 }
-
-pub trait NumericConsumer {
-    fn used_numerics(&self) -> Vec<NumericType>;
-}

@@ -6,7 +6,7 @@ use ndarray::{Array, ShapeError};
 use crate::{
     numerics::{
         nonlinear::relu::ReluChip,
-        numeric::{Numeric, NumericConfig, NumericType},
+        numeric::{Numeric, NumericConfig, NumericConsumer, NumericType},
     },
     utils::{
         helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
@@ -14,7 +14,7 @@ use crate::{
     },
 };
 
-use super::operation::{NumericConsumer, Operation};
+use super::operation::Operation;
 
 #[derive(Clone, Debug, Default)]
 pub struct ReLUChip<F: PrimeField> {
