@@ -30,7 +30,7 @@ impl<F: PrimeField> ReluChip<F> {
         meta: &mut ConstraintSystem<F>,
         numeric_config: NumericConfig,
     ) -> NumericConfig {
-        Self::_configure(meta, numeric_config, NumericType::Relu)
+        Self::_configure(meta, numeric_config, NumericType::Relu, NumericType::FieldLookUp)
     }
 }
 

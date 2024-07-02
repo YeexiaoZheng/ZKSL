@@ -8,7 +8,7 @@ use halo2_proofs::{
 
 use crate::{
     numerics::{
-        lookups::field_lookup::FieldLookUpChip,
+        lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip},
         nonlinear::{exp::ExpChip, relu::ReluChip},
         numeric::{Numeric, NumericConfig, NumericType},
     },
@@ -126,6 +126,7 @@ impl<F: PrimeField> Circuit<F> for ExpCircuit<F> {
 
         // Configure numeric chips
         let numeric_config = FieldLookUpChip::<F>::configure(meta, numeric_config);
+        let numeric_config = RowLookUpChip::<F>::configure(meta, numeric_config);
         let numeric_config = ExpChip::<F>::configure(meta, numeric_config);
         let numeric_config = ReluChip::<F>::configure(meta, numeric_config);
 
@@ -162,6 +163,12 @@ impl<F: PrimeField> Circuit<F> for ExpCircuit<F> {
         match_load_lookups(
             config.numeric_config.clone(),
             NumericType::FieldLookUp,
+            layouter.namespace(|| "load field lookups"),
+        )
+        .unwrap();
+        match_load_lookups(
+            config.numeric_config.clone(),
+            NumericType::RowLookUp,
             layouter.namespace(|| "load field lookups"),
         )
         .unwrap();

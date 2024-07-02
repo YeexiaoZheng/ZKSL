@@ -31,7 +31,7 @@ impl<F: PrimeField> ExpChip<F> {
         meta: &mut ConstraintSystem<F>,
         numeric_config: NumericConfig,
     ) -> NumericConfig {
-        Self::_configure(meta, numeric_config, NumericType::Exp)
+        Self::_configure(meta, numeric_config, NumericType::Exp, NumericType::RowLookUp)
     }
 }
 
@@ -88,12 +88,12 @@ impl<F: PrimeField> Numeric<F> for ExpChip<F> {
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,
         constants: &Vec<&AssignedCell<F, F>>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
-        let zero = constants[0];
-        let _one = constants[1];
+        let _zero = constants[0];
+        let one = constants[1];
         let mut input = inputs[0].clone();
         let input_len = input.len();
         while input.len() % self.num_input_cols_per_row() != 0 {
-            input.push(zero);
+            input.push(one);
         }
         match self.compute_rows(
             layouter.namespace(|| "Exp forward"),

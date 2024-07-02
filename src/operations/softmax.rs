@@ -141,7 +141,7 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
 impl<F: PrimeField> NumericConsumer for SoftMaxChip<F> {
     fn used_numerics(&self) -> Vec<NumericType> {
         vec![
-            NumericType::FieldLookUp,
+            NumericType::RowLookUp,
             NumericType::Exp,
             NumericType::Mul,
             NumericType::Accumulator,

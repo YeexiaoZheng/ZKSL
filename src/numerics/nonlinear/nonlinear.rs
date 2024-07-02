@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc};
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Region, Value},
     halo2curves::ff::PrimeField,
-    plonk::{ConstraintSystem, Error, Selector},
+    plonk::{ConstraintSystem, Error, Expression, Selector},
     poly::Rotation,
 };
 
@@ -47,24 +47,29 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         meta: &mut ConstraintSystem<F>,
         numeric_config: NumericConfig,
         numeric_type: NumericType,
+        input_type: NumericType,
     ) -> NumericConfig {
         let selector = meta.complex_selector();
         let cols_per_op = NUM_LOOKUP_COLS_PER_OP;
         let columns = numeric_config.columns;
 
         let mut tables = numeric_config.tables;
-        let input_lookup = match tables.get(&NumericType::FieldLookUp) {
+        let input_lookup = match tables.get(&input_type) {
             Some(tables) => tables,
-            None => panic!("Input field lookup table not found"),
+            None => panic!("Input {:?} table not found", input_type),
         }[0];
         let output_lookup = meta.lookup_table_column();
 
         for op_idx in 0..columns.len() / cols_per_op {
             let offset = op_idx * cols_per_op;
-            meta.lookup("non-linear lookup", |meta| {
+            meta.lookup(format!("non-linear: {:?} lookup", numeric_type), |meta| {
                 let s = meta.query_selector(selector);
-                let input_col = meta.query_advice(columns[offset + 0], Rotation::cur());
+                let mut input_col = meta.query_advice(columns[offset + 0], Rotation::cur());
                 let output_col = meta.query_advice(columns[offset + 1], Rotation::cur());
+                if input_type == NumericType::RowLookUp {
+                    input_col =
+                        input_col + Expression::Constant(F::from((-numeric_config.min_val) as u64));
+                }
                 vec![
                     (s.clone() * input_col, input_lookup),
                     (s.clone() * output_col, output_lookup),
@@ -102,17 +107,9 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         layouter.assign_table(
             || "non-linear table",
             |mut table| {
+                // println!("Loading non-linear table");
                 for i in 0..config.num_rows {
-                    let mut x = i as i64 + config.min_val;
-                    // TODO: This is a hack to handle the case when x = 0
-                    if x == 0 {
-                        x = match numeric_type {
-                            // Because the permutation argument should let Z(x) != 1 when x = 0
-                            // We need to shift the key by 1
-                            NumericType::Exp => i as i64 + config.min_val - 1,
-                            _ => i as i64 + config.min_val,
-                        };
-                    }
+                    let x = i as i64 + config.min_val;
                     let val = to_field::<F>(self.get_val_in_map(x));
                     table.assign_cell(
                         || "non-linear cell",
@@ -135,7 +132,6 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         _constants: &Vec<&AssignedCell<F, F>>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
         let numeric_config = self.get_numeric_config();
-        let numeric_type = self.get_numeric_type();
         let columns = &self.get_numeric_config().columns;
         let input = &inputs[0];
 
@@ -162,16 +158,7 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
             .enumerate()
             .map(|(i, cell)| {
                 let value = cell.value().map(|x| {
-                    let mut x = to_primitive::<F>(x);
-                    // TODO: This is a hack to handle the case when x = 0
-                    if x == 0 {
-                        x = match numeric_type {
-                            // Because the permutation argument should let Z(x) != 1 when x = 0
-                            // We need to shift the key by 1
-                            NumericType::Exp => x + 1,
-                            _ => x,
-                        };
-                    }
+                    let x = to_primitive::<F>(x);
                     to_field::<F>(self.get_val_in_map(x))
                 });
                 region.assign_advice(

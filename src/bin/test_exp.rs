@@ -7,12 +7,12 @@ use zkml::{
 };
 
 fn main() {
-    let k = 6;
-    let scale_factor = 1;
-    let num_cols = 2;
+    let k = 16;
+    let scale_factor = 1000;
+    let num_cols = 12;
 
     // original vector
-    let v_input: Vec<i64> = vec![10; 1];
+    let v_input: Vec<i64> = vec![0, 1, 2, 3, 4, 100];
     let v_output: Vec<i64> = v_input.iter().map(|x| exp(*x, scale_factor)).collect();
     println!("v_input: {:?}", v_input);
     println!("v_output: {:?}", v_output);
