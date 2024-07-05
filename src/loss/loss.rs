@@ -1,6 +1,8 @@
-use halo2_proofs::halo2curves::ff::PrimeField;
+use std::collections::HashMap;
 
-use crate::numerics::numeric::NumericType;
+use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
+
+use crate::utils::helpers::{AssignedTensorRef, CellRc};
 
 pub enum LossType {
     MSE,
@@ -11,9 +13,9 @@ pub trait Loss<F: PrimeField> {
     // returns the loss and gradients
     fn compute(
         &self,
-        // layouter: impl Layouter<F>,
-        // inputs: &Vec<AssignedTensorRef<F>>,
-        // constants: &HashMap<i64, CellRc<F>>,
-        // attributes: &HashMap<String, f64>,
+        layouter: impl Layouter<F>,
+        inputs: &AssignedTensorRef<F>,
+        label: &Vec<CellRc<F>>,
+        constants: &HashMap<i64, CellRc<F>>,
     ) -> ();
 }
