@@ -119,16 +119,10 @@ impl<F: PrimeField> Numeric<F> for MaxChip<F> {
 
         // Assign columns
         let mut res = vec![];
-        let chunks: Vec<&[&AssignedCell<F, F>]> =
-            input.chunks(self.num_output_cols_per_row()).collect();
-        let i1 = chunks[0];
-        let i2 = chunks[1];
-        for (i, (inp1, inp2)) in i1.iter().zip(i2.iter()).enumerate() {
+        for (i, idx) in (0..input.len()).step_by(2).enumerate() {
             let offset = i * self.num_cols_per_op();
-            let in1 =
-                inp1.copy_advice(|| "", region, self.config.columns[offset + 0], row_offset)?;
-            let in2 =
-                inp2.copy_advice(|| "", region, self.config.columns[offset + 1], row_offset)?;
+            let in1 = input[idx].clone();
+            let in2 = input[idx + 1].clone();
             let max = in1
                 .value()
                 .zip(in2.value())
@@ -168,8 +162,9 @@ impl<F: PrimeField> Numeric<F> for MaxChip<F> {
             constants,
         )?;
 
-        // Compute recursively until there is only one output
-        while outputs.len() != 1 {
+        // Compute log2^n times until there is only one output
+        let times = (outputs.len() as f64).log2().ceil() as usize;
+        for _ in 0..times {
             while outputs.len() % cols_per_row != 0 {
                 outputs.push(first.clone());
             }
@@ -180,6 +175,6 @@ impl<F: PrimeField> Numeric<F> for MaxChip<F> {
             )?;
         }
 
-        Ok(outputs)
+        Ok(vec![outputs[0].clone()])
     }
 }

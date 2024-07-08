@@ -9,9 +9,10 @@ use zkml::{
 
 fn main() {
     type F = Fr;
-    let k = 17;
+    let k = 16;
+    println!("row: {}", (1 << k) - 10 + 1);
     let scale_factor = 1000;
-    let num_cols = 12;
+    let num_cols = 6;
 
     let input = vec![300, 700];
     let input = Array::from_shape_vec([1, 2], input).unwrap().into_dyn();

@@ -126,6 +126,8 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
             )
         }
 
+        println!("f: {:?}", f);
+
         let ef = match exp_chip.forward(
             layouter.namespace(|| "SoftMaxLoss Exp forward"),
             &vec![f.iter().collect()],

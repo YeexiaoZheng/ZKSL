@@ -260,7 +260,7 @@ impl<F: PrimeField> Circuit<F> for SoftMaxLossCircuit<F> {
                 &constants,
             )
             .unwrap();
-        // println!("outputs: {:#?}", outputs);
+        println!("outputs: {:#?}", outputs);
 
         // Constrain public output
         let mut public_layouter = layouter.namespace(|| "public");
