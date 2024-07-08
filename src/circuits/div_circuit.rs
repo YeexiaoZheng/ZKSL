@@ -11,7 +11,10 @@ use crate::{
         div::DivChip,
         numeric::{Numeric, NumericConfig},
     },
-    utils::{helpers::{to_field, CellRc, NUMERIC_CONFIG}, math::Int},
+    utils::{
+        helpers::{to_field, CellRc, NUMERIC_CONFIG},
+        math::Int,
+    },
 };
 
 #[derive(Clone, Debug)]

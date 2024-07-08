@@ -9,7 +9,16 @@ use ndarray::ShapeError;
 
 use crate::{
     numerics::{
-        accumulator::AccumulatorChip, add::AddChip, div::DivChip, dot::DotChip, lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip}, max::MaxChip, mul::MulChip, nonlinear::{exp::ExpChip, ln::LnChip, nonlinear::NonLinearNumeric, relu::ReluChip}, numeric::{NumericConfig, NumericConsumer, NumericType}, sub::SubChip
+        accumulator::AccumulatorChip,
+        add::AddChip,
+        div::DivChip,
+        dot::DotChip,
+        lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip},
+        max::MaxChip,
+        mul::MulChip,
+        nonlinear::{exp::ExpChip, ln::LnChip, nonlinear::NonLinearNumeric, relu::ReluChip},
+        numeric::{NumericConfig, NumericConsumer, NumericType},
+        sub::SubChip,
     },
     operations::{
         gemm::GemmChip, none::NoneChip, operation::OPType, relu::ReLUChip, softmax::SoftMaxChip,

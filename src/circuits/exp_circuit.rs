@@ -14,7 +14,8 @@ use crate::{
     },
     utils::{
         helpers::{to_field, CellRc, NUMERIC_CONFIG},
-        matcher::match_load_lookups, math::Int,
+        matcher::match_load_lookups,
+        math::Int,
     },
 };
 

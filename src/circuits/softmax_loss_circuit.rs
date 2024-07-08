@@ -21,7 +21,8 @@ use crate::{
     },
     utils::{
         helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
-        matcher::match_load_lookups, math::Int,
+        matcher::match_load_lookups,
+        math::Int,
     },
 };
 
@@ -138,7 +139,12 @@ impl<F: PrimeField> SoftMaxLossCircuit<F> {
         )?)
     }
 
-    pub fn compute(&self, input: &Tensor, label: &Vec<Int>, numeric_config: &NumericConfig) -> Result<(Int, Tensor), ShapeError>{
+    pub fn compute(
+        &self,
+        input: &Tensor,
+        label: &Vec<Int>,
+        numeric_config: &NumericConfig,
+    ) -> Result<(Int, Tensor), ShapeError> {
         SoftMaxLossChip::<F>::compute(input, label, numeric_config)
     }
 }

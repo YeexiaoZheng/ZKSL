@@ -9,7 +9,10 @@ use crate::{
         dot::DotChip,
         numeric::{Numeric, NumericConfig, NumericConsumer, NumericType},
     },
-    utils::{helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor}, math::Int},
+    utils::{
+        helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
+        math::Int,
+    },
 };
 
 use super::operation::Operation;

@@ -9,7 +9,10 @@ use halo2_proofs::{
 
 use crate::{
     numerics::numeric::{Numeric, NumericConfig, NumericType},
-    utils::{helpers::{to_field, to_primitive}, math::Int},
+    utils::{
+        helpers::{to_field, to_primitive},
+        math::Int,
+    },
 };
 
 const NUM_LOOKUP_COLS_PER_OP: usize = 2;

@@ -4,7 +4,8 @@ use ndarray::IxDyn;
 
 use crate::utils::{
     helpers::Tensor,
-    loader::{GraphJson, NodeJson}, math::Int,
+    loader::{GraphJson, NodeJson},
+    math::Int,
 };
 
 #[derive(Clone, Debug, Default)]

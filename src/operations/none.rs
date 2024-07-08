@@ -5,7 +5,10 @@ use ndarray::ShapeError;
 
 use crate::{
     numerics::numeric::{NumericConfig, NumericConsumer, NumericType},
-    utils::{helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor}, math::Int},
+    utils::{
+        helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
+        math::Int,
+    },
 };
 
 use super::operation::Operation;

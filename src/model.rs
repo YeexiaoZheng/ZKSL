@@ -25,7 +25,8 @@ use crate::{
         helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
         matcher::{
             match_configure, match_consumer, match_load_lookups, match_op_type, match_operation,
-        }, math::Int,
+        },
+        math::Int,
     },
 };
 

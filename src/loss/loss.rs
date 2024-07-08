@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
 use ndarray::ShapeError;
 
-use crate::utils::{helpers::{AssignedTensor, AssignedTensorRef, CellRc}, math::Int};
+use crate::utils::{
+    helpers::{AssignedTensor, AssignedTensorRef, CellRc},
+    math::Int,
+};
 
 pub enum LossType {
     MSE,
