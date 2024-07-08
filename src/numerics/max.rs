@@ -121,8 +121,18 @@ impl<F: PrimeField> Numeric<F> for MaxChip<F> {
         let mut res = vec![];
         for (i, idx) in (0..input.len()).step_by(2).enumerate() {
             let offset = i * self.num_cols_per_op();
-            let in1 = input[idx].clone();
-            let in2 = input[idx + 1].clone();
+            let in1 = input[idx].copy_advice(
+                || "",
+                region,
+                self.config.columns[offset + 0],
+                row_offset,
+            )?;
+            let in2 = input[idx + 1].copy_advice(
+                || "",
+                region,
+                self.config.columns[offset + 1],
+                row_offset,
+            )?;
             let max = in1
                 .value()
                 .zip(in2.value())
