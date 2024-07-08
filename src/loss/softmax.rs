@@ -75,7 +75,6 @@ impl<F: PrimeField> SoftMaxLossChip<F> {
         for (i, y) in label.iter().enumerate() {
             dscore[[i, *y as usize]] -= numeric_config.scale_factor as Int;
         }
-        println!("loss: {}, dscore: {:?}", loss, dscore);
 
         Ok((loss / n, dscore / n))
     }
@@ -126,8 +125,6 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
             )
         }
 
-        println!("f: {:?}", f);
-
         let ef = match exp_chip.forward(
             layouter.namespace(|| "SoftMaxLoss Exp forward"),
             &vec![f.iter().collect()],
@@ -143,7 +140,7 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
             let sum = match acc_chip.forward(
                 layouter.namespace(|| "SoftMax Loss Accumulator forward"),
                 &vec![row.iter().collect()],
-                &vec![],
+                &vec![zero.as_ref()],
             ) {
                 Ok(output) => output[0].clone(),
                 Err(_) => panic!("SoftMax Loss accumulator forward failed"),
@@ -151,8 +148,8 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
             // Multiply by scale factor before division
             let row = match mul_chip.forward(
                 layouter.namespace(|| "SoftMax Loss Mul forward"),
-                &vec![row.iter().collect(), vec![&sum; row.len()]],
-                &vec![],
+                &vec![row.iter().collect(), vec![sf.as_ref(); row.len()]],
+                &vec![zero.as_ref()],
             ) {
                 Ok(output) => output,
                 Err(_) => panic!("SoftMax Loss mul forward failed"),
@@ -160,8 +157,8 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
             dscore.extend(
                 match div_chip.forward(
                     layouter.namespace(|| "SoftMax Loss Div forward"),
-                    &vec![row.iter().collect(), vec![sf.as_ref(); row.len()]],
-                    &vec![],
+                    &vec![row.iter().collect(), vec![&sum; row.len()]],
+                    &vec![zero.as_ref(), one.as_ref()],
                 ) {
                     Ok(output) => output,
                     Err(_) => panic!("SoftMax Loss div forward failed"),

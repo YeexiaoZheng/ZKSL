@@ -33,11 +33,15 @@ fn main() {
     println!("loss: {:?}", loss);
     println!("gradient: {:?}", gradient);
 
+    let f_gradient = gradient.iter().map(|x| to_field::<F>(*x)).collect::<Vec<_>>();
+    println!("f_gradient: {:?}", f_gradient);
+
     let prover = MockProver::run(
         k as u32,
         &circuit,
-        vec![gradient.iter().map(|x| to_field::<F>(*x)).collect()],
+        vec![f_gradient],
     )
     .unwrap();
-    println!("The proof is valid: {}", prover.verify().is_ok());
+
+    assert_eq!(prover.verify(), Ok(()));
 }

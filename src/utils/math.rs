@@ -1,4 +1,4 @@
-pub type Int = i128;
+pub type Int = i64;
 
 pub fn exp(x: Int, sf: u64) -> Int {
     let x = x as f64 / sf as f64;
