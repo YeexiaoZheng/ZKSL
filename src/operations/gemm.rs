@@ -9,7 +9,7 @@ use crate::{
         dot::DotChip,
         numeric::{Numeric, NumericConfig, NumericConsumer, NumericType},
     },
-    utils::helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
+    utils::{helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor}, math::Int},
 };
 
 use super::operation::Operation;
@@ -42,7 +42,7 @@ impl<F: PrimeField> GemmChip<F> {
 
         let input = input.clone().into_shape(input_shape)?;
         let weight = weight.clone().into_shape(weight_shape)?;
-        let output = input.dot(&weight) / numeric_config.scale_factor as i64;
+        let output = input.dot(&weight) / numeric_config.scale_factor as Int;
 
         Ok(vec![output.into_dyn()])
     }
@@ -70,7 +70,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
         &self,
         mut layouter: impl Layouter<F>,
         inputs: &Vec<AssignedTensorRef<F>>,
-        constants: &HashMap<i64, CellRc<F>>,
+        constants: &HashMap<Int, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         // Check input shape
@@ -86,7 +86,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
         let zero = constants.get(&0).unwrap().clone();
         let one = constants.get(&1).unwrap().clone();
         let sf = constants
-            .get(&(self.numeric_config.scale_factor as i64))
+            .get(&(self.numeric_config.scale_factor as Int))
             .unwrap()
             .clone();
         let constants = vec![zero.as_ref(), one.as_ref(), sf.as_ref()];
@@ -145,7 +145,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
         &self,
         _layouter: impl Layouter<F>,
         _inputs: &Vec<AssignedTensorRef<F>>,
-        _constants: &HashMap<i64, CellRc<F>>,
+        _constants: &HashMap<Int, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         todo!()

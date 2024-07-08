@@ -25,7 +25,7 @@ use crate::{
         helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
         matcher::{
             match_configure, match_consumer, match_load_lookups, match_op_type, match_operation,
-        },
+        }, math::Int,
     },
 };
 
@@ -121,7 +121,7 @@ impl<F: PrimeField> ModelCircuit<F> {
         &self,
         mut layouter: impl Layouter<F>,
         config: Rc<NumericConfig>,
-    ) -> Result<HashMap<i64, CellRc<F>>, Error> {
+    ) -> Result<HashMap<Int, CellRc<F>>, Error> {
         let sf = config.scale_factor;
         // let min_val = config.min_val;
         // let max_val = config.max_val;
@@ -129,9 +129,9 @@ impl<F: PrimeField> ModelCircuit<F> {
         Ok(layouter.assign_region(
             || "constants",
             |mut region| {
-                let mut constants: HashMap<i64, CellRc<F>> = HashMap::new();
+                let mut constants: HashMap<Int, CellRc<F>> = HashMap::new();
 
-                let vals = vec![0 as i64, 1, sf as i64 /*min_val, max_val*/];
+                let vals = vec![0 as Int, 1, sf as Int /*min_val, max_val*/];
                 for (i, val) in vals.iter().enumerate() {
                     let cell = region.assign_fixed(
                         || format!("constant_{}", i),

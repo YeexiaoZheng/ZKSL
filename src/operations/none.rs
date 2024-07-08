@@ -5,7 +5,7 @@ use ndarray::ShapeError;
 
 use crate::{
     numerics::numeric::{NumericConfig, NumericConsumer, NumericType},
-    utils::helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
+    utils::{helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor}, math::Int},
 };
 
 use super::operation::Operation;
@@ -39,7 +39,7 @@ impl<F: PrimeField> Operation<F> for NoneChip<F> {
         &self,
         _layouter: impl Layouter<F>,
         _inputs: &Vec<AssignedTensorRef<F>>,
-        _constants: &HashMap<i64, CellRc<F>>,
+        _constants: &HashMap<Int, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         Ok(vec![])
@@ -49,7 +49,7 @@ impl<F: PrimeField> Operation<F> for NoneChip<F> {
         &self,
         _layouter: impl Layouter<F>,
         _inputs: &Vec<AssignedTensorRef<F>>,
-        _constants: &HashMap<i64, CellRc<F>>,
+        _constants: &HashMap<Int, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         Ok(vec![])

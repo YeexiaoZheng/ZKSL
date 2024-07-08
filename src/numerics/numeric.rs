@@ -9,11 +9,14 @@ use halo2_proofs::{
     plonk::{Advice, Column, Error, Fixed, Selector, TableColumn},
 };
 
+use crate::utils::math::Int;
+
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum NumericType {
     RowLookUp,
     FieldLookUp,
 
+    Max,
     Add,
     Sub,
     Mul,
@@ -32,7 +35,7 @@ pub struct _NumericConfig {
     pub fixed_columns: Vec<Column<Fixed>>,
     pub selectors: HashMap<NumericType, Vec<Selector>>,
     pub tables: HashMap<NumericType, Vec<TableColumn>>,
-    pub maps: HashMap<NumericType, Vec<HashMap<i64, i64>>>,
+    pub maps: HashMap<NumericType, Vec<HashMap<Int, Int>>>,
     pub scale_factor: u64,
     pub shift_min_val: i64, // MUST be divisible by 2 * scale_factor
     pub num_rows: usize,
@@ -53,9 +56,9 @@ pub struct NumericConfig {
     pub scale_factor: u64,
     pub num_rows: usize,
     pub num_cols: usize,
-    pub min_val: i64,
-    pub max_val: i64,
-    pub shift_min_val: i64,
+    pub min_val: Int,
+    pub max_val: Int,
+    pub shift_min_val: Int,
 
     // columns
     pub columns: Vec<Column<Advice>>,
@@ -63,7 +66,7 @@ pub struct NumericConfig {
 
     // lookup tables
     pub tables: HashMap<NumericType, Vec<TableColumn>>,
-    pub maps: HashMap<NumericType, Vec<HashMap<i64, i64>>>,
+    pub maps: HashMap<NumericType, Vec<HashMap<Int, Int>>>,
 
     // selectors
     pub use_selectors: bool,

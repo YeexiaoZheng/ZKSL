@@ -9,7 +9,7 @@ use halo2_proofs::{
 
 use crate::{
     numerics::numeric::{Numeric, NumericConfig, NumericType},
-    utils::helpers::{to_field, to_primitive},
+    utils::{helpers::{to_field, to_primitive}, math::Int},
 };
 
 const NUM_LOOKUP_COLS_PER_OP: usize = 2;
@@ -19,13 +19,13 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         NUM_LOOKUP_COLS_PER_OP
     }
 
-    fn generate_map(scale_factor: u64, min_val: i64, num_rows: i64) -> HashMap<i64, i64>;
+    fn generate_map(scale_factor: u64, min_val: Int, num_rows: Int) -> HashMap<Int, Int>;
 
     fn get_numeric_config(&self) -> Rc<NumericConfig>;
 
     fn get_numeric_type(&self) -> NumericType;
 
-    fn get_val_in_map(&self, key: i64) -> i64 {
+    fn get_val_in_map(&self, key: Int) -> Int {
         match self.get_numeric_config().maps.get(&self.get_numeric_type()) {
             Some(map) => map[0].get(&key).unwrap().clone(),
             None => panic!("Map is not found"),
@@ -86,7 +86,7 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         let non_linear_map = Self::generate_map(
             numeric_config.scale_factor,
             numeric_config.min_val,
-            numeric_config.num_rows as i64,
+            numeric_config.num_rows as Int,
         );
         maps.insert(numeric_type, vec![non_linear_map]);
 
@@ -109,7 +109,7 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
             |mut table| {
                 // println!("Loading non-linear table");
                 for i in 0..config.num_rows {
-                    let x = i as i64 + config.min_val;
+                    let x = i as Int + config.min_val;
                     let val = to_field::<F>(self.get_val_in_map(x));
                     table.assign_cell(
                         || "non-linear cell",

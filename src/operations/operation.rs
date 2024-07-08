@@ -3,7 +3,7 @@ use std::{collections::HashMap, hash::Hash};
 use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
 use ndarray::ShapeError;
 
-use crate::utils::helpers::{AssignedTensor, AssignedTensorRef, CellRc};
+use crate::utils::{helpers::{AssignedTensor, AssignedTensorRef, CellRc}, math::Int};
 
 #[derive(Clone, Copy, Debug, Default, Hash, Eq, PartialEq)]
 pub enum OPType {
@@ -23,7 +23,7 @@ pub trait Operation<F: PrimeField> {
         &self,
         layouter: impl Layouter<F>,
         inputs: &Vec<AssignedTensorRef<F>>,
-        constants: &HashMap<i64, CellRc<F>>,
+        constants: &HashMap<Int, CellRc<F>>,
         attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError>;
 
@@ -31,7 +31,7 @@ pub trait Operation<F: PrimeField> {
         &self,
         layouter: impl Layouter<F>,
         inputs: &Vec<AssignedTensorRef<F>>,
-        constants: &HashMap<i64, CellRc<F>>,
+        constants: &HashMap<Int, CellRc<F>>,
         attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError>;
 }

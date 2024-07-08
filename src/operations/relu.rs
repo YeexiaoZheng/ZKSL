@@ -10,7 +10,7 @@ use crate::{
     },
     utils::{
         helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
-        math::relu,
+        math::{relu, Int},
     },
 };
 
@@ -54,7 +54,7 @@ impl<F: PrimeField> Operation<F> for ReLUChip<F> {
         &self,
         layouter: impl Layouter<F>,
         inputs: &Vec<AssignedTensorRef<F>>,
-        constants: &HashMap<i64, CellRc<F>>,
+        constants: &HashMap<Int, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         let relu_chip = ReluChip::<F>::construct(self.numeric_config.clone());
@@ -80,7 +80,7 @@ impl<F: PrimeField> Operation<F> for ReLUChip<F> {
         &self,
         _layouter: impl Layouter<F>,
         _inputs: &Vec<AssignedTensorRef<F>>,
-        _constants: &HashMap<i64, CellRc<F>>,
+        _constants: &HashMap<Int, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         Ok(vec![])

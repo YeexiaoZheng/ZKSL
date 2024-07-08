@@ -3,14 +3,14 @@ use std::collections::BTreeSet;
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use zkml::{
     circuits::div_circuit::DivCircuit,
-    utils::helpers::{configure_static_numeric_config, to_field},
+    utils::{helpers::{configure_static_numeric_config, to_field}, math::Int},
 };
 
 fn main() {
     // original vector
-    let v_input1: Vec<i64> = vec![10; 3];
-    let v_input2: Vec<i64> = vec![3; 3];
-    let v_output: Vec<i64> = vec![3; 3];
+    let v_input1: Vec<Int> = vec![10; 3];
+    let v_input2: Vec<Int> = vec![3; 3];
+    let v_output: Vec<Int> = vec![3; 3];
     // [10, 10, 10] / [3, 3, 3] = [3, 3, 3]
 
     // field vector

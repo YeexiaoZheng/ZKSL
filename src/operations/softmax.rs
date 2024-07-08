@@ -13,7 +13,7 @@ use crate::{
     },
     utils::{
         helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
-        math::exp,
+        math::{exp, Int},
     },
 };
 
@@ -49,14 +49,14 @@ impl<F: PrimeField> SoftMaxChip<F> {
             .map(|x| exp(x, scale_factor))
             .collect::<Vec<_>>();
 
-        let exp_sum = exp_out.iter().sum::<i64>();
+        let exp_sum = exp_out.iter().sum::<Int>();
 
         Ok(vec![Array::from_shape_vec(
             input.shape(),
             exp_out
                 .clone()
                 .into_iter()
-                .map(|x| ((x as f64) / (exp_sum as f64) * (scale_factor as f64)) as i64)
+                .map(|x| ((x as f64) / (exp_sum as f64) * (scale_factor as f64)) as Int)
                 .collect::<Vec<_>>(),
         )?])
     }
@@ -67,7 +67,7 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
         &self,
         mut layouter: impl Layouter<F>,
         inputs: &Vec<AssignedTensorRef<F>>,
-        constants: &HashMap<i64, CellRc<F>>,
+        constants: &HashMap<Int, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         let input = inputs[0].clone();
@@ -75,7 +75,7 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
         let zero = constants.get(&0).unwrap().clone();
         let one = constants.get(&1).unwrap().clone();
         let sf = constants
-            .get(&(self.numeric_config.scale_factor as i64))
+            .get(&(self.numeric_config.scale_factor as Int))
             .unwrap()
             .clone();
 
@@ -131,7 +131,7 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
         &self,
         _layouter: impl Layouter<F>,
         _inputs: &Vec<AssignedTensorRef<F>>,
-        _constants: &HashMap<i64, CellRc<F>>,
+        _constants: &HashMap<Int, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         Ok(vec![])

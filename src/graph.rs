@@ -4,7 +4,7 @@ use ndarray::IxDyn;
 
 use crate::utils::{
     helpers::Tensor,
-    loader::{GraphJson, NodeJson},
+    loader::{GraphJson, NodeJson}, math::Int,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -48,7 +48,7 @@ impl Graph {
                             tensor
                                 .data
                                 .iter()
-                                .map(|x| (x * scale_factor as f64) as i64)
+                                .map(|x| (x * scale_factor as f64) as Int)
                                 .collect(),
                         )
                         .unwrap(),

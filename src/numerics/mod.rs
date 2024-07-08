@@ -6,6 +6,7 @@ pub mod accumulator;
 pub mod add;
 pub mod div;
 pub mod dot;
+pub mod max;
 pub mod mul;
 pub mod sub;
 

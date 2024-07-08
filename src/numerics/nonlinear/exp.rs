@@ -8,7 +8,7 @@ use halo2_proofs::{
 
 use crate::{
     numerics::numeric::{Numeric, NumericConfig, NumericType},
-    utils::math::exp,
+    utils::math::{exp, Int},
 };
 
 use super::nonlinear::NonLinearNumeric;
@@ -41,7 +41,7 @@ impl<F: PrimeField> ExpChip<F> {
 }
 
 impl<F: PrimeField> NonLinearNumeric<F> for ExpChip<F> {
-    fn generate_map(scale_factor: u64, min_val: i64, num_rows: i64) -> HashMap<i64, i64> {
+    fn generate_map(scale_factor: u64, min_val: Int, num_rows: Int) -> HashMap<Int, Int> {
         (0..num_rows)
             .map(|i| {
                 let x = i + min_val;

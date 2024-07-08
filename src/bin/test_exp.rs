@@ -5,7 +5,7 @@ use zkml::{
     circuits::exp_circuit::ExpCircuit,
     utils::{
         helpers::{configure_static_numeric_config, to_field},
-        math::exp,
+        math::{exp, Int},
     },
 };
 
@@ -15,8 +15,8 @@ fn main() {
     let num_cols = 12;
 
     // original vector
-    let v_input: Vec<i64> = vec![0, 1, 2, 3, 4, 100];
-    let v_output: Vec<i64> = v_input.iter().map(|x| exp(*x, scale_factor)).collect();
+    let v_input: Vec<Int> = vec![0, 1, 2, 3, 4, 100];
+    let v_output: Vec<Int> = v_input.iter().map(|x| exp(*x, scale_factor)).collect();
     println!("v_input: {:?}", v_input);
     println!("v_output: {:?}", v_output);
 

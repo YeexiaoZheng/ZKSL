@@ -1,4 +1,4 @@
-pub type Int = i64;
+pub type Int = i128;
 
 pub fn exp(x: Int, sf: u64) -> Int {
     let x = x as f64 / sf as f64;
@@ -26,4 +26,8 @@ pub fn abs(x: Int) -> Int {
 
 pub fn relu(x: Int) -> Int {
     x.max(0)
+}
+
+pub fn max(x: Int, y: Int) -> Int {
+    x.max(y)
 }
