@@ -1,4 +1,5 @@
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+use ndarray::Array;
 use zkml::{
     graph::Graph,
     stage::{forward::ForwardCircuit, initialize::Initialize},
@@ -20,7 +21,10 @@ fn main() {
     configure_static_numeric_config(k, 12, scale_factor, circuit.clone().used_numerics.clone());
 
     // Run the circuit
-    let output = circuit.run().unwrap();
+    let input = Array::from_shape_vec([1, 2], vec![300, 700])
+        .unwrap()
+        .into_dyn();
+    let output = circuit.run(&input).unwrap();
     println!("output: {:?}", output);
     for (i, o) in output.iter().enumerate() {
         println!("output[{}]: {}({})", i, o, *o as f64 / scale_factor as f64);

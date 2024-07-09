@@ -121,5 +121,5 @@ pub trait Initialize<F: PrimeField> {
         )?)
     }
 
-    fn run(&self) -> Result<Tensor, ShapeError>;
+    fn run(&self, tensor: &Tensor) -> Result<Tensor, ShapeError>;
 }

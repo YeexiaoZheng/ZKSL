@@ -53,7 +53,7 @@ impl<F: PrimeField> Initialize<F> for ForwardCircuit<F> {
         }
     }
 
-    fn run(&self) -> Result<Tensor, ShapeError> {
+    fn run(&self, _tensor: &Tensor) -> Result<Tensor, ShapeError> {
         let mut tensor_map = self.graph.tensor_map.clone();
         let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
 
