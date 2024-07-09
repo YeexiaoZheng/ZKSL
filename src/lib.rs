@@ -7,3 +7,4 @@ pub mod circuits;
 pub mod loss;
 pub mod numerics;
 pub mod operations;
+pub mod stage;

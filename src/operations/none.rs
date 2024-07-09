@@ -35,6 +35,15 @@ impl<F: PrimeField> NoneChip<F> {
     ) -> Result<Vec<Tensor>, ShapeError> {
         Ok(inputs.clone())
     }
+
+    // This function is used for non-circuit backward
+    pub fn backward(
+        inputs: &Vec<Tensor>,
+        _numeric_config: &NumericConfig,
+        _attributes: &HashMap<String, f64>,
+    ) -> Result<Vec<Tensor>, ShapeError> {
+        Ok(inputs.clone())
+    }
 }
 
 impl<F: PrimeField> Operation<F> for NoneChip<F> {

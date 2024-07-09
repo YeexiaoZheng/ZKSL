@@ -37,7 +37,7 @@ pub fn match_op_type(op_type: String) -> OPType {
     }
 }
 
-pub fn match_operation<F: PrimeField>(
+pub fn match_forward<F: PrimeField>(
     op_type: OPType,
 ) -> fn(&Vec<Tensor>, &NumericConfig, &HashMap<String, f64>) -> Result<Vec<Tensor>, ShapeError> {
     match op_type {
@@ -45,6 +45,17 @@ pub fn match_operation<F: PrimeField>(
         OPType::ReLU => ReLUChip::<F>::forward,
         OPType::SoftMax => SoftMaxChip::<F>::forward,
         _ => NoneChip::<F>::forward,
+    }
+}
+
+pub fn match_backward<F: PrimeField>(
+    op_type: OPType,
+) -> fn(&Vec<Tensor>, &NumericConfig, &HashMap<String, f64>) -> Result<Vec<Tensor>, ShapeError> {
+    match op_type {
+        OPType::GEMM => GemmChip::<F>::backward,
+        OPType::ReLU => ReLUChip::<F>::backward,
+        OPType::SoftMax => SoftMaxChip::<F>::backward,
+        _ => NoneChip::<F>::backward,
     }
 }
 

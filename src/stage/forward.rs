@@ -4,13 +4,6 @@ use std::{
     rc::Rc,
 };
 
-use halo2_proofs::{
-    circuit::{Layouter, SimpleFloorPlanner, Value},
-    halo2curves::ff::PrimeField,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, ErrorFront, Instance},
-};
-use ndarray::{Array, IxDyn, ShapeError};
-
 use crate::{
     graph::Graph,
     numerics::numeric::{NumericConfig, NumericType},
@@ -22,51 +15,37 @@ use crate::{
         softmax::SoftMaxChip,
     },
     utils::{
-        helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
-        matcher::{
-            match_configure, match_consumer, match_forward, match_load_lookups, match_op_type,
-        },
-        math::Int,
+        helpers::{FieldTensor, Tensor, NUMERIC_CONFIG},
+        matcher::{match_configure, match_forward, match_load_lookups, match_op_type},
     },
 };
 
+use halo2_proofs::{
+    circuit::{Layouter, SimpleFloorPlanner},
+    halo2curves::ff::PrimeField,
+    plonk::{Circuit, Column, ConstraintSystem, ErrorFront, Instance},
+};
+use ndarray::ShapeError;
+
+use super::initialize::Initialize;
+
 #[derive(Clone, Debug)]
-pub struct ModelCircuit<F: PrimeField> {
+pub struct ForwardCircuit<F: PrimeField> {
     pub graph: Graph,
     pub used_numerics: BTreeSet<NumericType>,
     pub field_tensor_map: HashMap<String, FieldTensor<F>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct ModelConfig<F: PrimeField> {
+pub struct ForwardConfig<F: PrimeField> {
     pub numeric_config: Rc<NumericConfig>,
     pub public: Column<Instance>,
     pub _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField> ModelCircuit<F> {
-    pub fn construct(graph: Graph) -> Self {
-        let mut used_numerics = BTreeSet::new();
-        for node in graph.nodes.iter() {
-            let op_type = match_op_type(node.op_type.clone());
-            used_numerics.extend(match_consumer::<F>(op_type).used_numerics().iter())
-        }
-
-        let field_tensor_map = graph
-            .tensor_map
-            .iter()
-            .map(|(k, v)| {
-                (
-                    k.clone(),
-                    Array::from_shape_vec(
-                        v.shape(),
-                        v.iter().map(|x| to_field::<F>(x.clone())).collect(),
-                    )
-                    .unwrap(),
-                )
-            })
-            .collect();
-
+impl<F: PrimeField> Initialize<F> for ForwardCircuit<F> {
+    fn construct(graph: Graph) -> Self {
+        let (used_numerics, field_tensor_map) = Self::initialize(graph.clone());
         Self {
             graph,
             used_numerics,
@@ -74,81 +53,7 @@ impl<F: PrimeField> ModelCircuit<F> {
         }
     }
 
-    pub fn assign_tensor_map(
-        &self,
-        mut layouter: impl Layouter<F>,
-        columns: &Vec<Column<Advice>>,
-        tensors_map: &HashMap<String, FieldTensor<F>>,
-    ) -> Result<HashMap<String, AssignedTensor<F>>, Error> {
-        Ok(layouter.assign_region(
-            || "assign_tensor_map",
-            |mut region| {
-                let mut cell_idx = 0;
-                let assigned_tensors = tensors_map
-                    .iter()
-                    .map(|(key, tensor)| {
-                        let assigned_tensor = tensor
-                            .iter()
-                            .map(|cell| {
-                                let row_idx = cell_idx / columns.len();
-                                let col_idx = cell_idx % columns.len();
-                                cell_idx += 1;
-                                Ok(Rc::new(region.assign_advice(
-                                    || "assign tensor cell",
-                                    columns[col_idx],
-                                    row_idx,
-                                    || Value::known(*cell),
-                                )?))
-                            })
-                            .collect::<Result<Vec<_>, ErrorFront>>()?;
-                        Ok((
-                            key.clone(),
-                            match Array::from_shape_vec(IxDyn(tensor.shape()), assigned_tensor) {
-                                Ok(x) => x,
-                                Err(e) => panic!(
-                                    "Error occurs at ModelCircuit.assign_tensors_map: {:?}",
-                                    e
-                                ),
-                            },
-                        ))
-                    })
-                    .collect::<Result<HashMap<_, _>, ErrorFront>>()?;
-                Ok(assigned_tensors)
-            },
-        )?)
-    }
-
-    pub fn assign_constants(
-        &self,
-        mut layouter: impl Layouter<F>,
-        config: Rc<NumericConfig>,
-    ) -> Result<HashMap<Int, CellRc<F>>, Error> {
-        let sf = config.scale_factor;
-        // let min_val = config.min_val;
-        // let max_val = config.max_val;
-
-        Ok(layouter.assign_region(
-            || "constants",
-            |mut region| {
-                let mut constants: HashMap<Int, CellRc<F>> = HashMap::new();
-
-                let vals = vec![0 as Int, 1, sf as Int /*min_val, max_val*/];
-                for (i, val) in vals.iter().enumerate() {
-                    let cell = region.assign_fixed(
-                        || format!("constant_{}", i),
-                        config.constants[0],
-                        i,
-                        || Value::known(to_field::<F>(*val)),
-                    )?;
-                    constants.insert(*val, Rc::new(cell));
-                }
-
-                Ok(constants)
-            },
-        )?)
-    }
-
-    pub fn forward(&self) -> Result<Tensor, ShapeError> {
+    fn run(&self) -> Result<Tensor, ShapeError> {
         let mut tensor_map = self.graph.tensor_map.clone();
         let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
 
@@ -172,8 +77,8 @@ impl<F: PrimeField> ModelCircuit<F> {
     }
 }
 
-impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
-    type Config = ModelConfig<F>;
+impl<F: PrimeField> Circuit<F> for ForwardCircuit<F> {
+    type Config = ForwardConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -214,7 +119,7 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
         let public = meta.instance_column();
         meta.enable_equality(public);
 
-        ModelConfig {
+        ForwardConfig {
             numeric_config: Rc::new(numeric_config),
             public,
             _marker: PhantomData,
@@ -252,7 +157,7 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
             ) {
                 Ok(_) => (),
                 Err(e) => panic!(
-                    "Error occurs at ModelCircuit.synthesize load lookups: {:?}",
+                    "Error occurs at ForwardCircuit.synthesize load lookups: {:?}",
                     e
                 ),
             }
