@@ -37,7 +37,6 @@ fn main() {
         .iter()
         .map(|x| to_field::<F>(*x))
         .collect::<Vec<_>>();
-    println!("f_gradient: {:?}", f_gradient);
 
     let prover = MockProver::run(k as u32, &circuit, vec![f_gradient]).unwrap();
 

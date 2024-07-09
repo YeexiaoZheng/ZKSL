@@ -1,4 +1,5 @@
 pub type Int = i64;
+pub type Float = f64;
 
 pub fn exp(x: Int, sf: u64) -> Int {
     let x = x as f64 / sf as f64;

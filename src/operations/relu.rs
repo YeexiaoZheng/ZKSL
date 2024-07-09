@@ -47,23 +47,41 @@ impl<F: PrimeField> ReLUChip<F> {
                 .collect::<Vec<_>>(),
         )?])
     }
+
+    pub fn backward(
+        inputs: &Vec<Tensor>,
+        _numeric_config: &NumericConfig,
+        _attributes: &HashMap<String, f64>,
+    ) -> Result<Vec<Tensor>, ShapeError> {
+        let input = &inputs[0];
+
+        Ok(vec![Array::from_shape_vec(
+            input.shape(),
+            input
+                .clone()
+                .into_iter()
+                .map(|x| relu(x))
+                .collect::<Vec<_>>(),
+        )?])
+    }
 }
 
 impl<F: PrimeField> Operation<F> for ReLUChip<F> {
     fn forward(
         &self,
-        layouter: impl Layouter<F>,
+        mut layouter: impl Layouter<F>,
         inputs: &Vec<AssignedTensorRef<F>>,
         constants: &HashMap<Int, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
-    ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
-        let relu_chip = ReluChip::<F>::construct(self.numeric_config.clone());
+    ) -> Result<Vec<AssignedTensor<F>>, ShapeError> { 
         let input = inputs[0].clone();
         let zero = constants.get(&0).unwrap().clone();
         let one = constants.get(&1).unwrap().clone();
 
+        let relu_chip = ReluChip::<F>::construct(self.numeric_config.clone());
+
         let output = match relu_chip.forward(
-            layouter,
+            layouter.namespace(|| "ReLU forward"),
             &vec![input.iter().map(|x| x.as_ref()).collect::<Vec<_>>()],
             &vec![zero.as_ref(), one.as_ref()],
         ) {
@@ -78,12 +96,28 @@ impl<F: PrimeField> Operation<F> for ReLUChip<F> {
 
     fn backward(
         &self,
-        _layouter: impl Layouter<F>,
-        _inputs: &Vec<AssignedTensorRef<F>>,
-        _constants: &HashMap<Int, CellRc<F>>,
+        mut layouter: impl Layouter<F>,
+        inputs: &Vec<AssignedTensorRef<F>>,
+        constants: &HashMap<Int, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
-        Ok(vec![])
+        let inpgrad = inputs[0].clone();
+        let zero = constants.get(&0).unwrap().clone();
+
+        let relu_chip = ReluChip::<F>::construct(self.numeric_config.clone());
+        
+        let outgrad = match relu_chip.forward(
+            layouter.namespace(|| "ReLU backward"),
+            &vec![inpgrad.iter().map(|x| x.as_ref()).collect()],
+            &vec![zero.as_ref()],
+        ) {
+            Ok(output) => output,
+            Err(_) => panic!("ReLU backward failed"),
+        };
+        Ok(vec![Array::from_shape_vec(
+            inpgrad.shape(),
+            outgrad.into_iter().map(|x| Rc::new(x)).collect(),
+        )?])
     }
 }
 

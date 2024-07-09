@@ -60,6 +60,17 @@ impl<F: PrimeField> SoftMaxChip<F> {
                 .collect::<Vec<_>>(),
         )?])
     }
+
+    // This function is used for non-circuit backward
+    pub fn backward(
+        inputs: &Vec<Tensor>,
+        _numeric_config: &NumericConfig,
+        _attributes: &HashMap<String, f64>,
+    ) -> Result<Vec<Tensor>, ShapeError> {
+        let input = &inputs[0];
+        let gradient = input.iter().map(|x| x.clone()).collect::<Vec<_>>();
+        Ok(vec![Array::from_shape_vec(input.shape(), gradient)?])
+    }
 }
 
 impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
@@ -130,11 +141,13 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
     fn backward(
         &self,
         _layouter: impl Layouter<F>,
-        _inputs: &Vec<AssignedTensorRef<F>>,
+        inputs: &Vec<AssignedTensorRef<F>>,
         _constants: &HashMap<Int, CellRc<F>>,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
-        Ok(vec![])
+        let input = inputs[0].clone();
+        let gradient = input.iter().map(|x| x.clone()).collect::<Vec<_>>();
+        Ok(vec![Array::from_shape_vec(input.shape(), gradient)?])
     }
 }
 
