@@ -1,52 +1,21 @@
-use std::{
-    collections::{BTreeSet, HashMap},
-    rc::Rc,
-};
+use std::{collections::HashMap, rc::Rc};
 
 use halo2_proofs::{
     circuit::{Layouter, Value},
     halo2curves::ff::PrimeField,
     plonk::{Advice, Column, Error, ErrorFront},
 };
-use ndarray::{Array, IxDyn, ShapeError};
+use ndarray::{Array, IxDyn};
 
 use crate::{
-    graph::Graph,
-    numerics::numeric::{NumericConfig, NumericType},
+    numerics::numeric::NumericConfig,
     utils::{
-        helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor},
-        matcher::{match_consumer, match_op_type},
+        helpers::{to_field, AssignedTensor, CellRc, FieldTensor},
         math::Int,
     },
 };
 
-pub trait Initialize<F: PrimeField> {
-    fn initialize(graph: Graph) -> (BTreeSet<NumericType>, HashMap<String, FieldTensor<F>>) {
-        let mut used_numerics = BTreeSet::new();
-        for node in graph.nodes.iter() {
-            let op_type = match_op_type(node.op_type.clone());
-            used_numerics.extend(match_consumer::<F>(op_type).used_numerics().iter())
-        }
-
-        let field_tensor_map = graph
-            .tensor_map
-            .iter()
-            .map(|(k, v)| {
-                (
-                    k.clone(),
-                    Array::from_shape_vec(
-                        v.shape(),
-                        v.iter().map(|x| to_field::<F>(x.clone())).collect(),
-                    )
-                    .unwrap(),
-                )
-            })
-            .collect();
-        (used_numerics, field_tensor_map)
-    }
-
-    fn construct(graph: Graph) -> Self;
-
+pub trait Assign<F: PrimeField> {
     fn assign_tensor_map(
         &self,
         mut layouter: impl Layouter<F>,
@@ -91,6 +60,72 @@ pub trait Initialize<F: PrimeField> {
         )?)
     }
 
+    fn assign_vector(
+        &self,
+        mut layouter: impl Layouter<F>,
+        columns: &Vec<Column<Advice>>,
+        input: &Vec<F>,
+    ) -> Result<Vec<CellRc<F>>, Error> {
+        Ok(layouter.assign_region(
+            || "assign input",
+            |mut region| {
+                let mut cell_idx = 0;
+                input
+                    .iter()
+                    .map(|cell| {
+                        let row_idx = cell_idx / columns.len();
+                        let col_idx = cell_idx % columns.len();
+                        cell_idx += 1;
+                        let out = region.assign_advice(
+                            || "assign tensor cell",
+                            columns[col_idx],
+                            row_idx,
+                            || Value::known(*cell),
+                        )?;
+                        Ok(Rc::new(out))
+                    })
+                    .collect::<Result<Vec<_>, ErrorFront>>()
+            },
+        )?)
+    }
+
+    fn assign_tensor(
+        &self,
+        mut layouter: impl Layouter<F>,
+        columns: &Vec<Column<Advice>>,
+        tensor: &FieldTensor<F>,
+    ) -> Result<AssignedTensor<F>, Error> {
+        Ok(layouter.assign_region(
+            || "assign_tensors",
+            |mut region| {
+                let mut cell_idx = 0;
+                match Array::from_shape_vec(
+                    IxDyn(tensor.shape()),
+                    tensor
+                        .iter()
+                        .map(|cell| {
+                            let row_idx = cell_idx / columns.len();
+                            let col_idx = cell_idx % columns.len();
+                            cell_idx += 1;
+                            Ok(Rc::new(region.assign_advice(
+                                || "assign tensor cell",
+                                columns[col_idx],
+                                row_idx,
+                                || Value::known(*cell),
+                            )?))
+                        })
+                        .collect::<Result<Vec<_>, ErrorFront>>()?,
+                ) {
+                    Ok(x) => Ok(x),
+                    Err(e) => panic!(
+                        "Error occurs at FullyConnectedCircuit.assign_tensor: {:?}",
+                        e
+                    ),
+                }
+            },
+        )?)
+    }
+
     fn assign_constants(
         &self,
         mut layouter: impl Layouter<F>,
@@ -120,6 +155,4 @@ pub trait Initialize<F: PrimeField> {
             },
         )?)
     }
-
-    fn run(&self, tensor: &Tensor) -> Result<Tensor, ShapeError>;
 }

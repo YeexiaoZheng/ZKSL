@@ -9,7 +9,7 @@ use halo2_proofs::{
     halo2curves::ff::PrimeField,
     plonk::{Circuit, Column, ConstraintSystem, ErrorFront, Instance},
 };
-use ndarray::ShapeError;
+use ndarray::{Array, ShapeError};
 
 use crate::{
     graph::Graph,
@@ -22,12 +22,14 @@ use crate::{
         softmax::SoftMaxChip,
     },
     utils::{
-        helpers::{FieldTensor, Tensor, NUMERIC_CONFIG},
-        matcher::{match_backward, match_configure, match_load_lookups, match_op_type},
+        helpers::{to_field, FieldTensor, Tensor, NUMERIC_CONFIG},
+        matcher::{
+            match_backward, match_configure, match_consumer, match_load_lookups, match_op_type,
+        },
     },
 };
 
-use super::initialize::Initialize;
+use super::assign::Assign;
 
 #[derive(Clone, Debug)]
 pub struct BackwardCircuit<F: PrimeField> {
@@ -43,9 +45,28 @@ pub struct BackwardConfig<F: PrimeField> {
     pub _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField> Initialize<F> for BackwardCircuit<F> {
-    fn construct(graph: Graph) -> Self {
-        let (used_numerics, field_tensor_map) = Self::initialize(graph.clone());
+impl<F: PrimeField> BackwardCircuit<F> {
+    pub fn construct(graph: Graph) -> Self {
+        let mut used_numerics = BTreeSet::new();
+        for node in graph.nodes.iter() {
+            let op_type = match_op_type(node.op_type.clone());
+            used_numerics.extend(match_consumer::<F>(op_type).used_numerics().iter())
+        }
+
+        let field_tensor_map = graph
+            .tensor_map
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    Array::from_shape_vec(
+                        v.shape(),
+                        v.iter().map(|x| to_field::<F>(x.clone())).collect(),
+                    )
+                    .unwrap(),
+                )
+            })
+            .collect();
         Self {
             graph,
             used_numerics,
@@ -53,7 +74,7 @@ impl<F: PrimeField> Initialize<F> for BackwardCircuit<F> {
         }
     }
 
-    fn run(&self, _tensor: &Tensor) -> Result<Tensor, ShapeError> {
+    pub fn run(&self, _tensor: &Tensor) -> Result<Tensor, ShapeError> {
         let mut tensor_map = self.graph.tensor_map.clone();
         let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
 
@@ -76,6 +97,8 @@ impl<F: PrimeField> Initialize<F> for BackwardCircuit<F> {
         Ok(tensor_map.get("output").unwrap().clone())
     }
 }
+
+impl<F: PrimeField> Assign<F> for BackwardCircuit<F> {}
 
 impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
     type Config = BackwardConfig<F>;

@@ -8,6 +8,7 @@ use crate::utils::{
     math::Int,
 };
 
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum LossType {
     MSE,
     SoftMax,

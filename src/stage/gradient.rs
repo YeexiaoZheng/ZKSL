@@ -1,22 +1,15 @@
-use std::{
-    collections::{BTreeSet, HashMap},
-    marker::PhantomData,
-    rc::Rc,
-};
+use std::{collections::BTreeSet, marker::PhantomData, rc::Rc};
 
 use crate::{
-    graph::Graph,
-    numerics::numeric::{NumericConfig, NumericType},
-    operations::{
-        gemm::GemmChip,
-        none::NoneChip,
-        operation::{OPType, Operation},
-        relu::ReLUChip,
-        softmax::SoftMaxChip,
+    loss::{
+        loss::{Loss, LossType},
+        softmax::SoftMaxLossChip,
     },
+    numerics::numeric::{NumericConfig, NumericType},
     utils::{
-        helpers::{FieldTensor, Tensor, NUMERIC_CONFIG},
-        matcher::{match_configure, match_forward, match_load_lookups, match_op_type},
+        helpers::{to_field, FieldTensor, Tensor, NUMERIC_CONFIG},
+        matcher::{match_configure, match_load_lookups},
+        math::Int,
     },
 };
 
@@ -25,15 +18,18 @@ use halo2_proofs::{
     halo2curves::ff::PrimeField,
     plonk::{Circuit, Column, ConstraintSystem, ErrorFront, Instance},
 };
-use ndarray::ShapeError;
+use ndarray::{Array, ShapeError};
 
-use super::initialize::Initialize;
+use super::assign::Assign;
 
 #[derive(Clone, Debug)]
 pub struct GradientCircuit<F: PrimeField> {
-    pub graph: Graph,
+    pub score: Tensor,
+    pub field_score: FieldTensor<F>,
+    pub label: Vec<Int>,
+    pub field_label: Vec<F>,
+    pub loss: LossType,
     pub used_numerics: BTreeSet<NumericType>,
-    pub field_tensor_map: HashMap<String, FieldTensor<F>>,
 }
 
 #[derive(Clone, Debug)]
@@ -43,39 +39,50 @@ pub struct GradientConfig<F: PrimeField> {
     pub _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField> Initialize<F> for GradientCircuit<F> {
-    fn construct(graph: Graph) -> Self {
-        let (used_numerics, field_tensor_map) = Self::initialize(graph.clone());
+impl<F: PrimeField> GradientCircuit<F> {
+    pub fn construct(score: Tensor, label: Vec<Int>, loss: LossType) -> Self {
+        let mut used_numerics = BTreeSet::new();
+        match loss {
+            LossType::SoftMax => {
+                used_numerics.insert(NumericType::Exp);
+                used_numerics.insert(NumericType::Sub);
+                used_numerics.insert(NumericType::Mul);
+                used_numerics.insert(NumericType::Div);
+                used_numerics.insert(NumericType::Accumulator);
+                used_numerics.insert(NumericType::Max);
+                used_numerics.insert(NumericType::RowLookUp);
+                used_numerics.insert(NumericType::FieldLookUp);
+            }
+            _ => (),
+        }
+        let field_score = Array::from_shape_vec(
+            score.shape(),
+            score.iter().map(|x| to_field::<F>(*x)).collect(),
+        )
+        .unwrap();
+        let field_label = label.iter().map(|x| to_field::<F>(*x)).collect::<Vec<_>>();
+
         Self {
-            graph,
+            score,
+            field_score,
+            label,
+            field_label,
+            loss,
             used_numerics,
-            field_tensor_map,
         }
     }
 
-    fn run(&self, _tensor: &Tensor) -> Result<Tensor, ShapeError> {
-        let mut tensor_map = self.graph.tensor_map.clone();
+    pub fn run(&self) -> Result<(Int, Tensor), ShapeError> {
         let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
-
-        for node in self.graph.nodes.iter() {
-            let operation = match_forward::<F>(match_op_type(node.op_type.clone()));
-            let outputs = operation(
-                &node
-                    .inputs
-                    .iter()
-                    .map(|x| tensor_map.get(x).unwrap().clone())
-                    .collect::<Vec<Tensor>>(),
-                &numeric_config,
-                &node.attributes,
-            )?;
-            for (op, output) in node.outputs.iter().zip(outputs.into_iter()) {
-                tensor_map.insert(op.clone(), output);
-            }
-        }
-
-        Ok(tensor_map.get("output").unwrap().clone())
+        let loss_func = match self.loss {
+            LossType::SoftMax => SoftMaxLossChip::<F>::compute,
+            _ => panic!("Not implemented yet"),
+        };
+        loss_func(&self.score, &self.label, &numeric_config)
     }
 }
+
+impl<F: PrimeField> Assign<F> for GradientCircuit<F> {}
 
 impl<F: PrimeField> Circuit<F> for GradientCircuit<F> {
     type Config = GradientConfig<F>;
@@ -132,11 +139,18 @@ impl<F: PrimeField> Circuit<F> for GradientCircuit<F> {
         mut layouter: impl Layouter<F>,
     ) -> Result<(), ErrorFront> {
         // Assign tensors
-        let mut assigned_tensor_map = self
-            .assign_tensor_map(
-                layouter.namespace(|| "assign_tensor_map"),
+        let assigned_score = self
+            .assign_tensor(
+                layouter.namespace(|| "assign_tensor"),
                 &config.numeric_config.columns,
-                &self.field_tensor_map,
+                &self.field_score,
+            )
+            .unwrap();
+        let assigned_label = self
+            .assign_vector(
+                layouter.namespace(|| "assign_label"),
+                &config.numeric_config.columns,
+                &self.field_label,
             )
             .unwrap();
 
@@ -164,52 +178,22 @@ impl<F: PrimeField> Circuit<F> for GradientCircuit<F> {
         }
 
         // Run the circuit by each operation chips
-        for op in self.graph.nodes.iter() {
-            // Get inputs
-            let inputs = op
-                .inputs
-                .iter()
-                .map(|x| assigned_tensor_map.get(x).unwrap().view())
-                .collect();
-            // Run the operation
-            // TODO:
-            let outputs = match match_op_type(op.op_type.clone()) {
-                OPType::GEMM => GemmChip::<F>::construct(config.numeric_config.clone()).forward(
-                    layouter.namespace(|| op.op_type.clone()),
-                    &inputs,
+        let output = match self.loss {
+            LossType::SoftMax => {
+                let softmax_loss_chip =
+                    SoftMaxLossChip::<F>::construct(config.numeric_config.clone());
+                softmax_loss_chip.compute(
+                    layouter.namespace(|| "softmax loss"),
+                    &assigned_score.view(),
+                    &assigned_label,
                     &constants,
-                    &op.attributes,
-                ),
-                OPType::ReLU => ReLUChip::<F>::construct(config.numeric_config.clone()).forward(
-                    layouter.namespace(|| op.op_type.clone()),
-                    &inputs,
-                    &constants,
-                    &op.attributes,
-                ),
-                OPType::SoftMax => SoftMaxChip::<F>::construct(config.numeric_config.clone())
-                    .forward(
-                        layouter.namespace(|| op.op_type.clone()),
-                        &inputs,
-                        &constants,
-                        &op.attributes,
-                    ),
-                OPType::None => NoneChip::<F>::construct(config.numeric_config.clone()).forward(
-                    layouter.namespace(|| op.op_type.clone()),
-                    &inputs,
-                    &constants,
-                    &op.attributes,
-                ),
-                _ => panic!("Operation type not supported"),
+                )
             }
-            .unwrap();
-            // Insert the output to the assigned tensor map
-            for (op, output) in op.outputs.iter().zip(outputs.into_iter()) {
-                assigned_tensor_map.insert(op.clone(), output);
-            }
+            _ => panic!("Not implemented yet"),
         }
+        .unwrap();
 
         // Constrain the output
-        let output = assigned_tensor_map.get("output").unwrap().clone();
         for (i, cell) in output.iter().enumerate() {
             layouter
                 .constrain_instance(cell.as_ref().cell(), config.public, i)

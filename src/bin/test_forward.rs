@@ -2,19 +2,21 @@ use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use ndarray::Array;
 use zkml::{
     graph::Graph,
-    stage::{forward::ForwardCircuit, initialize::Initialize},
+    stage::forward::ForwardCircuit,
     utils::{
         helpers::{configure_static_numeric_config, to_field},
         loader::load_from_json,
     },
 };
 
+type F = Fr;
+
 fn main() {
     // Load graph
     let scale_factor = 512;
     let graph = Graph::construct(load_from_json("jsons/mlp2.json"), scale_factor);
     // println!("{:?}", graph);
-    let circuit = ForwardCircuit::<Fr>::construct(graph);
+    let circuit = ForwardCircuit::<F>::construct(graph);
 
     // Set numeric config
     let k = 15;
