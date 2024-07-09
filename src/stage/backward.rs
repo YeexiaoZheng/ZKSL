@@ -173,26 +173,26 @@ impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
                 .collect();
             // Run the operation
             let outputs = match match_op_type(op.op_type.clone()) {
-                OPType::GEMM => GemmChip::<F>::construct(config.numeric_config.clone()).forward(
+                OPType::GEMM => GemmChip::<F>::construct(config.numeric_config.clone()).backward(
                     layouter.namespace(|| op.op_type.clone()),
                     &inputs,
                     &constants,
                     &op.attributes,
                 ),
-                OPType::ReLU => ReLUChip::<F>::construct(config.numeric_config.clone()).forward(
+                OPType::ReLU => ReLUChip::<F>::construct(config.numeric_config.clone()).backward(
                     layouter.namespace(|| op.op_type.clone()),
                     &inputs,
                     &constants,
                     &op.attributes,
                 ),
                 OPType::SoftMax => SoftMaxChip::<F>::construct(config.numeric_config.clone())
-                    .forward(
+                    .backward(
                         layouter.namespace(|| op.op_type.clone()),
                         &inputs,
                         &constants,
                         &op.attributes,
                     ),
-                OPType::None => NoneChip::<F>::construct(config.numeric_config.clone()).forward(
+                OPType::None => NoneChip::<F>::construct(config.numeric_config.clone()).backward(
                     layouter.namespace(|| op.op_type.clone()),
                     &inputs,
                     &constants,
