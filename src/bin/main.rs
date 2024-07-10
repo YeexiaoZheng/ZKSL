@@ -39,8 +39,7 @@ fn main() {
         let gradient_circuit =
             GradientCircuit::<F>::construct(score.clone(), label.clone(), LossType::SoftMax);
         let (loss, gradient) = gradient_circuit.run().unwrap();
-        println!("loss: {:?}", loss);
-        println!("gradient: {:?}", gradient);
+        println!("loss: {:?}, gradient: {:?}", loss, gradient);
 
         // Run backward circuit
         let mut backward_graph = forward_circuit.graph.clone();
@@ -84,19 +83,20 @@ fn main() {
         assert_eq!(gradient_prover.verify(), Ok(()));
 
         // Set numeric config
-        // configure_static_numeric_config(
-        //     k,
-        //     num_cols,
-        //     scale_factor,
-        //     backward_circuit.clone().used_numerics.clone(),
-        // );
-        // // Verify the circuit
-        // let backward_public = backward_gradient
-        //     .iter()
-        //     .map(|x| to_field(*x))
-        //     .collect::<Vec<_>>();
-        // let backward_prover =
-        //     MockProver::run(k as u32, &backward_circuit, vec![backward_public]).unwrap();
-        // assert_eq!(backward_prover.verify(), Ok(()));
+        configure_static_numeric_config(
+            k,
+            num_cols,
+            scale_factor,
+            1,
+            backward_circuit.clone().used_numerics.clone(),
+        );
+        // Verify the circuit
+        let backward_public = backward_gradient
+            .iter()
+            .map(|x| to_field(*x))
+            .collect::<Vec<_>>();
+        let backward_prover =
+            MockProver::run(k as u32, &backward_circuit, vec![backward_public]).unwrap();
+        assert_eq!(backward_prover.verify(), Ok(()));
     }
 }

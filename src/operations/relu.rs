@@ -103,13 +103,14 @@ impl<F: PrimeField> Operation<F> for ReLUChip<F> {
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         let inpgrad = inputs[0].clone();
         let zero = constants.get(&0).unwrap().clone();
+        let one = constants.get(&1).unwrap().clone();
 
         let relu_chip = ReluChip::<F>::construct(self.numeric_config.clone());
 
         let outgrad = match relu_chip.forward(
             layouter.namespace(|| "ReLU backward"),
             &vec![inpgrad.iter().map(|x| x.as_ref()).collect()],
-            &vec![zero.as_ref()],
+            &vec![zero.as_ref(), one.as_ref()],
         ) {
             Ok(output) => output,
             Err(_) => panic!("ReLU backward failed"),

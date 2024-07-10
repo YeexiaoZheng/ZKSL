@@ -211,12 +211,19 @@ impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
         }
 
         // Run the circuit by each operation chips
-        for op in self.graph.nodes.iter() {
+        let mut res = assigned_tensor_map.get("gradient").unwrap().clone();
+        for op in self.graph.nodes.iter().rev() {
             // Get inputs
             let inputs = op
-                .inputs
+                .backward_inputs
                 .iter()
-                .map(|x| assigned_tensor_map.get(x).unwrap().view())
+                .map(|x| {
+                    match assigned_tensor_map.get(x) {
+                        Some(x) => x,
+                        None => panic!("Tensor not found: {}", x),
+                    }
+                    .view()
+                })
                 .collect();
             // Run the operation
             let outputs = match match_op_type(op.op_type.clone()) {
@@ -248,15 +255,15 @@ impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
                 _ => panic!("Operation type not supported"),
             }
             .unwrap();
+            res = outputs[0].clone();
             // Insert the output to the assigned tensor map
-            for (op, output) in op.outputs.iter().zip(outputs.into_iter()) {
-                assigned_tensor_map.insert(op.clone(), output);
+            for (output_str, output) in op.backward_outputs.iter().zip(outputs.into_iter()) {
+                assigned_tensor_map.insert(output_str.clone(), output);
             }
         }
 
         // Constrain the output
-        let output = assigned_tensor_map.get("output").unwrap().clone();
-        for (i, cell) in output.iter().enumerate() {
+        for (i, cell) in res.iter().enumerate() {
             layouter
                 .constrain_instance(cell.as_ref().cell(), config.public, i)
                 .unwrap();

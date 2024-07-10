@@ -160,14 +160,15 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         // Check input shape
-        assert_eq!(inputs.len(), 3);
+        // assert_eq!(inputs.len(), 3);
         let inpgrad = inputs[0].clone();
-        // let forward_output = inputs[1].clone();
-        let weight = inputs[2].clone();
+        let input = inputs[1].t().clone();
+        let weight = inputs[2].t().clone();
         let inpgrad_shape = inpgrad.shape();
+        let input_shape = input.shape();
         let weight_shape = weight.shape();
-        assert_eq!(inpgrad_shape.len(), 2);
         assert_eq!(inpgrad_shape.len(), weight_shape.len());
+        assert_eq!(input_shape[1], inpgrad_shape[0]);
         assert_eq!(inpgrad_shape[1], weight_shape[0]);
 
         // Get constants
@@ -183,8 +184,8 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
         let dot_chip = DotChip::construct(self.numeric_config.clone());
         let div_chip = DivChip::construct(self.numeric_config.clone());
 
-        // Backward pass
-        let mut outputs = vec![];
+        // Gradient backward pass
+        let mut outgrad = vec![];
         for i in 0..inpgrad_shape[0] {
             for j in 0..weight_shape[1] {
                 let inpgrad = inpgrad
@@ -197,7 +198,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
                     .into_iter()
                     .map(|x| x.as_ref())
                     .collect::<Vec<_>>();
-                outputs.extend(
+                outgrad.extend(
                     match dot_chip.forward(
                         layouter.namespace(|| format!("dot_{}_{}", i, j)),
                         &vec![inpgrad, weight],
@@ -210,12 +211,50 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
             }
         }
 
+        // Weight backward pass
+        let mut weight_grad = vec![];
+        for i in 0..input_shape[0] {
+            for j in 0..inpgrad_shape[1] {
+                let input = input
+                    .slice(s![i, ..])
+                    .into_iter()
+                    .map(|x| x.as_ref())
+                    .collect::<Vec<_>>();
+                let inpgrad = inpgrad
+                    .slice(s![.., j])
+                    .into_iter()
+                    .map(|x| x.as_ref())
+                    .collect::<Vec<_>>();
+                weight_grad.extend(
+                    match dot_chip.forward(
+                        layouter.namespace(|| format!("dot_{}_{}", i, j)),
+                        &vec![input, inpgrad],
+                        &vec![zero.as_ref()],
+                    ) {
+                        Ok(output) => output,
+                        Err(e) => panic!("Error in GemmChip.dot_chip: {:?}", e),
+                    },
+                );
+            }
+        }
+
         // Divide by scale factor because the output is scaled by scale factor * scale factor
-        let outputs = match div_chip.forward(
+        let outgrad = match div_chip.forward(
             layouter.namespace(|| "div"),
             &vec![
-                outputs.iter().collect(),
-                vec![sf.clone().as_ref(); outputs.len()],
+                outgrad.iter().collect(),
+                vec![sf.clone().as_ref(); outgrad.len()],
+            ],
+            &constants,
+        ) {
+            Ok(output) => output,
+            Err(e) => panic!("Error in GemmChip.div_chip: {:?}", e),
+        };
+        let weight_grad = match div_chip.forward(
+            layouter.namespace(|| "div"),
+            &vec![
+                weight_grad.iter().collect(),
+                vec![sf.clone().as_ref(); weight_grad.len()],
             ],
             &constants,
         ) {
@@ -223,10 +262,16 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
             Err(e) => panic!("Error in GemmChip.div_chip: {:?}", e),
         };
 
-        Ok(vec![Array::from_shape_vec(
-            IxDyn(&[inpgrad_shape[0], weight_shape[1]]),
-            outputs.into_iter().map(|x| Rc::new(x)).collect(),
-        )?])
+        Ok(vec![
+            Array::from_shape_vec(
+                IxDyn(&[inpgrad_shape[0], weight_shape[1]]),
+                outgrad.into_iter().map(|x| Rc::new(x)).collect(),
+            )?,
+            Array::from_shape_vec(
+                IxDyn(&[input_shape[0], inpgrad_shape[1]]),
+                weight_grad.into_iter().map(|x| Rc::new(x)).collect(),
+            )?,
+        ])
     }
 }
 
