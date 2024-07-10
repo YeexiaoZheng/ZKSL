@@ -20,7 +20,13 @@ fn main() {
     let circuit = GradientCircuit::<F>::construct(score, label, LossType::SoftMax);
 
     // Set numeric config
-    configure_static_numeric_config(k, 12, scale_factor, circuit.clone().used_numerics.clone());
+    configure_static_numeric_config(
+        k,
+        12,
+        scale_factor,
+        1,
+        circuit.clone().used_numerics.clone(),
+    );
 
     // Run the circuit
     let (loss, gradient) = circuit.run().unwrap();

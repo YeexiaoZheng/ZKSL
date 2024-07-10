@@ -15,6 +15,8 @@ pub struct NodeJson {
     pub op_type: String,
     pub inputs: Vec<String>,
     pub outputs: Vec<String>,
+    pub backward_inputs: Vec<String>,
+    pub backward_outputs: Vec<String>,
     #[serde_as(as = "Map<DisplayFromStr, _>")]
     pub attributes: Vec<(String, f64)>,
 }

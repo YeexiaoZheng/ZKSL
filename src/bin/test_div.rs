@@ -35,7 +35,7 @@ fn main() {
     let k = 10;
     let scale_factor = 1;
 
-    configure_static_numeric_config(k, 12, scale_factor, BTreeSet::new());
+    configure_static_numeric_config(k, 12, scale_factor, 1, BTreeSet::new());
 
     let prover = MockProver::run(k as u32, &circuit, vec![f_output]).unwrap();
 

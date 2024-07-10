@@ -42,5 +42,22 @@ for node in model.graph.node:
         'attributes': attributes
     })
 
+# Add backward inputs and outputs
+# TODO: Add backward inputs and outputs for all nodes
+gradient_input = ['gradient']
+idx = 0
+for node in reversed(model_dict['nodes']):
+    weights = []
+    for input in node['inputs']:
+        # if 'weight' in input or 'bias' in input:
+        if 'weight' in input:
+            weights.append(input)
+    node['backward_inputs'] = gradient_input + node['inputs']
+    gradient_input = [f'gradient_{idx}']
+    idx += 1
+    if node['op_type'] == 'Conv':
+        pass
+    node['backward_outputs'] = gradient_input + [w + '.grad' for w in weights]
+
 print(model_dict)
 json.dump(model_dict, open(save_path, 'w'))

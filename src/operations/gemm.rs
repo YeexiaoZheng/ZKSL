@@ -53,24 +53,26 @@ impl<F: PrimeField> GemmChip<F> {
     // This function is used for non-circuit backward
     pub fn backward(
         inputs: &Vec<Tensor>,
-        _numeric_config: &NumericConfig,
+        numeric_config: &NumericConfig,
         _attributes: &HashMap<String, f64>,
     ) -> Result<Vec<Tensor>, ShapeError> {
         let inpgrad = &inputs[0];
-        let forward_output = &inputs[1];
+        let input = &inputs[1];
         let weight = &inputs[2];
         let inpgrad_shape = (inpgrad.shape()[0], inpgrad.shape()[1]);
-        let forward_output_shape = (forward_output.shape()[0], forward_output.shape()[1]);
+        let input_shape = (input.shape()[0], input.shape()[1]);
         let weight_shape = (weight.shape()[0], weight.shape()[1]);
-        assert_eq!(inpgrad_shape.1, weight_shape.0);
+        assert_eq!(input_shape.1, weight_shape.0);
+        assert_eq!(inpgrad_shape.1, weight_shape.1);
 
         let inpgrad = inpgrad.clone().into_shape(inpgrad_shape)?;
-        let forward_output = forward_output.clone().into_shape(forward_output_shape)?;
+        let input = input.clone().into_shape(input_shape)?;
         let weight = weight.clone().into_shape(weight_shape)?;
 
-        let _weight_grad = forward_output.t().dot(&inpgrad);
-
-        Ok(vec![inpgrad.dot(&weight.t()).into_dyn()])
+        Ok(vec![
+            inpgrad.dot(&weight.t()).into_dyn() / numeric_config.scale_factor as Int,
+            input.t().dot(&inpgrad).into_dyn() / numeric_config.scale_factor as Int,
+        ])
     }
 }
 

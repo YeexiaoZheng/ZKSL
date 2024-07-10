@@ -26,6 +26,7 @@ use crate::{
         matcher::{
             match_backward, match_configure, match_consumer, match_load_lookups, match_op_type,
         },
+        math::Int,
     },
 };
 
@@ -36,6 +37,8 @@ pub struct BackwardCircuit<F: PrimeField> {
     pub graph: Graph,
     pub used_numerics: BTreeSet<NumericType>,
     pub field_tensor_map: HashMap<String, FieldTensor<F>>,
+    pub lr: Int,
+    pub field_lr: F,
 }
 
 #[derive(Clone, Debug)]
@@ -46,7 +49,7 @@ pub struct BackwardConfig<F: PrimeField> {
 }
 
 impl<F: PrimeField> BackwardCircuit<F> {
-    pub fn construct(graph: Graph) -> Self {
+    pub fn construct(graph: Graph, lr: Int) -> Self {
         let mut used_numerics = BTreeSet::new();
         for node in graph.nodes.iter() {
             let op_type = match_op_type(node.op_type.clone());
@@ -71,30 +74,51 @@ impl<F: PrimeField> BackwardCircuit<F> {
             graph,
             used_numerics,
             field_tensor_map,
+            lr,
+            field_lr: to_field::<F>(lr),
         }
     }
 
-    pub fn run(&self, _tensor: &Tensor) -> Result<Tensor, ShapeError> {
-        let mut tensor_map = self.graph.tensor_map.clone();
+    pub fn run(&mut self) -> Result<Tensor, ShapeError> {
+        let mut res = self.graph.tensor_map.get("gradient").unwrap().clone();
         let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
 
-        for node in self.graph.nodes.iter() {
+        for node in self.graph.nodes.iter().rev() {
             let operation = match_backward::<F>(match_op_type(node.op_type.clone()));
+            // println!(
+            //     "Running operation: {}, backward inputs: {:?}",
+            //     node.op_type, node.backward_inputs
+            // );
             let outputs = operation(
                 &node
-                    .inputs
+                    .backward_inputs
                     .iter()
-                    .map(|x| tensor_map.get(x).unwrap().clone())
+                    .map(|x| match self.graph.tensor_map.get(x) {
+                        Some(x) => x.clone(),
+                        None => panic!("Tensor not found: {}", x),
+                    })
                     .collect::<Vec<Tensor>>(),
                 &numeric_config,
                 &node.attributes,
             )?;
-            for (op, output) in node.outputs.iter().zip(outputs.into_iter()) {
-                tensor_map.insert(op.clone(), output);
+            res = outputs[0].clone();
+            for (output_str, output) in node.backward_outputs.iter().zip(outputs.into_iter()) {
+                // Update the weight
+                if output_str.contains(".grad") {
+                    let k = output_str
+                        .clone()
+                        .strip_suffix(".grad")
+                        .unwrap()
+                        .to_string();
+                    let weight = self.graph.tensor_map.get(&k).unwrap();
+                    let new_weight = weight.clone() - output.clone() / self.lr;
+                    *self.graph.tensor_map.entry(k).or_default() = new_weight;
+                }
+                self.graph.tensor_map.insert(output_str.clone(), output);
             }
         }
 
-        Ok(tensor_map.get("output").unwrap().clone())
+        Ok(res)
     }
 }
 

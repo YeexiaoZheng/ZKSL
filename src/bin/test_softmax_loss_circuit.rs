@@ -22,7 +22,7 @@ fn main() {
     let f_label = label.iter().map(|x| to_field::<F>(*x)).collect::<Vec<_>>();
     let f_input = Array::from_shape_vec([1, 2], f_input).unwrap().into_dyn();
 
-    configure_static_numeric_config(k, num_cols, scale_factor, BTreeSet::new());
+    configure_static_numeric_config(k, num_cols, scale_factor, 1, BTreeSet::new());
 
     let circuit = SoftMaxLossCircuit::construct(f_input, f_label);
 

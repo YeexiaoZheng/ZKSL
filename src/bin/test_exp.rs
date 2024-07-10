@@ -32,7 +32,7 @@ fn main() {
 
     let circuit = ExpCircuit::construct(f_input);
 
-    configure_static_numeric_config(k, num_cols, scale_factor, BTreeSet::new());
+    configure_static_numeric_config(k, num_cols, scale_factor, 1, BTreeSet::new());
 
     let prover = MockProver::run(k as u32, &circuit, vec![f_output]).unwrap();
 

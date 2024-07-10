@@ -13,6 +13,8 @@ pub struct Node {
     pub op_type: String,
     pub inputs: Vec<String>,
     pub outputs: Vec<String>,
+    pub backward_inputs: Vec<String>,
+    pub backward_outputs: Vec<String>,
     pub attributes: HashMap<String, f64>,
 }
 
@@ -22,6 +24,8 @@ impl Node {
             op_type: node_json.op_type,
             inputs: node_json.inputs,
             outputs: node_json.outputs,
+            backward_inputs: node_json.backward_inputs,
+            backward_outputs: node_json.backward_outputs,
             attributes: node_json.attributes.into_iter().collect(),
         }
     }

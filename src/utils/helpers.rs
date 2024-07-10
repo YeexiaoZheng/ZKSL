@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeSet, HashMap},
     rc::Rc,
     sync::{Arc, Mutex},
 };
@@ -10,7 +10,10 @@ use ndarray::{Array, ArrayView, IxDyn};
 use num_bigint::BigUint;
 use num_traits::ToPrimitive;
 
-use crate::numerics::numeric::{NumericConfig, NumericType};
+use crate::{
+    graph::Graph,
+    numerics::numeric::{NumericConfig, NumericType},
+};
 
 use super::math::Int;
 
@@ -28,6 +31,7 @@ pub fn configure_static_numeric_config(
     k: usize,
     num_cols: usize,
     scale_factor: u64,
+    batch_size: usize,
     used_numerics: BTreeSet<NumericType>,
 ) {
     let nconfig = &NUMERIC_CONFIG;
@@ -41,6 +45,7 @@ pub fn configure_static_numeric_config(
         min_val: -(1 << (k - 1)),
         max_val: (1 << (k - 1)) - 10,
         use_selectors: true,
+        batch_size,
         used_numerics: Arc::new(used_numerics),
         ..cloned
     };
@@ -58,6 +63,17 @@ pub fn to_primitive<F: PrimeField>(x: &F) -> Int {
     let big = BigUint::from_bytes_le(&(*x + fbias).to_repr().as_ref());
     let big = big.to_u128().unwrap();
     big as Int - bias
+}
+
+pub fn update_graph(orginal_graph: &Graph, tensor_map: &HashMap<String, Tensor>) -> Graph {
+    let mut graph = orginal_graph.clone();
+    graph.tensor_map.clear();
+    for k in orginal_graph.tensor_map.keys() {
+        graph
+            .tensor_map
+            .insert(k.clone(), tensor_map.get(k).unwrap().clone());
+    }
+    graph
 }
 
 // TODO: refactor

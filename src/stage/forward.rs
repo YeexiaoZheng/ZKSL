@@ -75,10 +75,21 @@ impl<F: PrimeField> ForwardCircuit<F> {
         }
     }
 
-    pub fn run(&self, _tensor: &Tensor) -> Result<Tensor, ShapeError> {
+    // pub fn load_input(&mut self, tensor: &Tensor) {
+    //     self.graph
+    //         .tensor_map
+    //         .insert("input".to_string(), tensor.clone());
+    //     let field_tensor = Array::from_shape_vec(
+    //         tensor.shape(),
+    //         tensor.iter().map(|x| to_field::<F>(x.clone())).collect(),
+    //     )
+    //     .unwrap();
+    //     self.field_tensor_map
+    //         .insert("input".to_string(), field_tensor);
+    // }
+
+    pub fn run(&mut self) -> Result<Tensor, ShapeError> {
         let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
-        let mut tensor_map = self.graph.tensor_map.clone();
-        // tensor_map.insert("input".to_string(), tensor.clone());
 
         for node in self.graph.nodes.iter() {
             let operation = match_forward::<F>(match_op_type(node.op_type.clone()));
@@ -86,17 +97,17 @@ impl<F: PrimeField> ForwardCircuit<F> {
                 &node
                     .inputs
                     .iter()
-                    .map(|x| tensor_map.get(x).unwrap().clone())
+                    .map(|x| self.graph.tensor_map.get(x).unwrap().clone())
                     .collect::<Vec<Tensor>>(),
                 &numeric_config,
                 &node.attributes,
             )?;
-            for (op, output) in node.outputs.iter().zip(outputs.into_iter()) {
-                tensor_map.insert(op.clone(), output);
+            for (output_str, output) in node.outputs.iter().zip(outputs.into_iter()) {
+                self.graph.tensor_map.insert(output_str.clone(), output);
             }
         }
 
-        Ok(tensor_map.get("output").unwrap().clone())
+        Ok(self.graph.tensor_map.get("output").unwrap().clone())
     }
 }
 

@@ -42,6 +42,7 @@ impl<F: PrimeField> SoftMaxLossChip<F> {
         // Check input shape
         assert_eq!(input.ndim(), 2);
         assert_eq!(input.shape()[0], label.len());
+        assert_eq!(label.len(), numeric_config.batch_size);
 
         let n = input.shape()[0] as Int;
         let max = Array::from_shape_vec(
@@ -99,6 +100,10 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
         let one = constants.get(&1).unwrap().clone();
         let sf = constants
             .get(&(self.numeric_config.scale_factor as Int))
+            .unwrap()
+            .clone();
+        let bs = constants
+            .get(&(self.numeric_config.batch_size as Int))
             .unwrap()
             .clone();
 
@@ -189,6 +194,15 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
             y.value()
                 .map(|y| dscore[[i, to_primitive::<F>(y) as usize]] = dscore_sub[i].clone());
         }
+
+        let dscore = match div_chip.forward(
+            layouter.namespace(|| "SoftMax Loss Div forward"),
+            &vec![dscore.iter().collect(), vec![bs.as_ref(); dscore.len()]],
+            &vec![zero.as_ref(), one.as_ref()],
+        ) {
+            Ok(output) => output,
+            Err(_) => panic!("SoftMax Loss div forward failed"),
+        };
 
         Ok(Array::from_shape_vec(
             input.shape(),
