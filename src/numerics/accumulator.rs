@@ -113,7 +113,7 @@ impl<F: PrimeField> Numeric<F> for AccumulatorChip<F> {
         Ok(vec![res])
     }
 
-    fn forward(
+    fn compute(
         &self,
         mut layouter: impl Layouter<F>,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,

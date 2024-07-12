@@ -170,7 +170,7 @@ impl<F: PrimeField> Circuit<F> for DivCircuit<F> {
 
         // Forward pass
         let outputs = div_chip
-            .forward(
+            .compute(
                 layouter.namespace(|| "div"),
                 &vec![input1.iter().collect(), input2.iter().collect()],
                 &constants.values().into_iter().map(|x| x.as_ref()).collect(),

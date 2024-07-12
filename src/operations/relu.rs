@@ -80,7 +80,7 @@ impl<F: PrimeField> Operation<F> for ReLUChip<F> {
 
         let relu_chip = ReluChip::<F>::construct(self.numeric_config.clone());
 
-        let output = match relu_chip.forward(
+        let output = match relu_chip.compute(
             layouter.namespace(|| "ReLU forward"),
             &vec![input.iter().map(|x| x.as_ref()).collect::<Vec<_>>()],
             &vec![zero.as_ref(), one.as_ref()],
@@ -107,7 +107,7 @@ impl<F: PrimeField> Operation<F> for ReLUChip<F> {
 
         let relu_chip = ReluChip::<F>::construct(self.numeric_config.clone());
 
-        let outgrad = match relu_chip.forward(
+        let outgrad = match relu_chip.compute(
             layouter.namespace(|| "ReLU backward"),
             &vec![inpgrad.iter().map(|x| x.as_ref()).collect()],
             &vec![zero.as_ref(), one.as_ref()],

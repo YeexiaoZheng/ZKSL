@@ -154,7 +154,7 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
         Ok(vec![res])
     }
 
-    fn forward(
+    fn compute(
         &self,
         mut layouter: impl Layouter<F>,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,
@@ -182,7 +182,7 @@ impl<F: PrimeField> Numeric<F> for DotChip<F> {
 
         // Use accumulator to sum up all outputs
         let acc_chip = AccumulatorChip::<F>::construct(self.config.clone());
-        Ok(acc_chip.forward(
+        Ok(acc_chip.compute(
             layouter.namespace(|| "dot adder"),
             &vec![outputs.iter().collect::<Vec<_>>()],
             &vec![zero],

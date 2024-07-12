@@ -108,7 +108,7 @@ impl<F: PrimeField> Numeric<F> for SubChip<F> {
         Ok(res)
     }
 
-    fn forward(
+    fn compute(
         &self,
         mut layouter: impl Layouter<F>,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,

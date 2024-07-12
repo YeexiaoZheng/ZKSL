@@ -110,63 +110,63 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
         let mut f = vec![];
         for row in input.outer_iter() {
             let row = row.iter().map(|x| x.as_ref()).collect::<Vec<_>>();
-            let max = match max_chip.forward(
-                layouter.namespace(|| "SoftMaxLoss Max forward"),
+            let max = match max_chip.compute(
+                layouter.namespace(|| "SoftMaxLoss Max compute"),
                 &vec![row.clone()],
                 &vec![],
             ) {
                 Ok(output) => output[0].clone(),
-                Err(_) => panic!("SoftMaxLoss max forward failed"),
+                Err(_) => panic!("SoftMaxLoss max compute failed"),
             };
             f.extend(
-                match sub_chip.forward(
-                    layouter.namespace(|| "SoftMaxLoss sub forward"),
+                match sub_chip.compute(
+                    layouter.namespace(|| "SoftMaxLoss sub compute"),
                     &vec![row.clone(), vec![&max; row.len()]],
                     &vec![zero.as_ref()],
                 ) {
                     Ok(output) => output,
-                    Err(_) => panic!("SoftMaxLoss sub forward failed"),
+                    Err(_) => panic!("SoftMaxLoss sub compute failed"),
                 },
             )
         }
 
-        let ef = match exp_chip.forward(
-            layouter.namespace(|| "SoftMaxLoss Exp forward"),
+        let ef = match exp_chip.compute(
+            layouter.namespace(|| "SoftMaxLoss Exp compute"),
             &vec![f.iter().collect()],
             &vec![zero.as_ref(), one.as_ref()],
         ) {
             Ok(output) => output,
-            Err(_) => panic!("SoftMaxLoss exp forward failed"),
+            Err(_) => panic!("SoftMaxLoss exp compute failed"),
         };
 
         let ef = Array::from_shape_vec(input.shape(), ef)?;
         let mut dscore = vec![];
         for row in ef.outer_iter() {
-            let sum = match acc_chip.forward(
-                layouter.namespace(|| "SoftMax Loss Accumulator forward"),
+            let sum = match acc_chip.compute(
+                layouter.namespace(|| "SoftMax Loss Accumulator compute"),
                 &vec![row.iter().collect()],
                 &vec![zero.as_ref()],
             ) {
                 Ok(output) => output[0].clone(),
-                Err(_) => panic!("SoftMax Loss accumulator forward failed"),
+                Err(_) => panic!("SoftMax Loss accumulator compute failed"),
             };
             // Multiply by scale factor before division
-            let row = match mul_chip.forward(
-                layouter.namespace(|| "SoftMax Loss Mul forward"),
+            let row = match mul_chip.compute(
+                layouter.namespace(|| "SoftMax Loss Mul compute"),
                 &vec![row.iter().collect(), vec![sf.as_ref(); row.len()]],
                 &vec![zero.as_ref()],
             ) {
                 Ok(output) => output,
-                Err(_) => panic!("SoftMax Loss mul forward failed"),
+                Err(_) => panic!("SoftMax Loss mul compute failed"),
             };
             dscore.extend(
-                match div_chip.forward(
-                    layouter.namespace(|| "SoftMax Loss Div forward"),
+                match div_chip.compute(
+                    layouter.namespace(|| "SoftMax Loss Div compute"),
                     &vec![row.iter().collect(), vec![&sum; row.len()]],
                     &vec![zero.as_ref(), one.as_ref()],
                 ) {
                     Ok(output) => output,
-                    Err(_) => panic!("SoftMax Loss div forward failed"),
+                    Err(_) => panic!("SoftMax Loss div compute failed"),
                 },
             )
         }
@@ -178,8 +178,8 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
                 .map(|y| dscore_label_view.push(&dscore[[i, to_primitive::<F>(y) as usize]]));
         }
 
-        let dscore_sub = match sub_chip.forward(
-            layouter.namespace(|| "SoftMax Loss Sub forward"),
+        let dscore_sub = match sub_chip.compute(
+            layouter.namespace(|| "SoftMax Loss Sub compute"),
             &vec![
                 dscore_label_view.clone(),
                 vec![sf.as_ref(); dscore_label_view.len()],
@@ -187,7 +187,7 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
             &vec![zero.as_ref()],
         ) {
             Ok(output) => output,
-            Err(_) => panic!("SoftMax Loss sub forward failed"),
+            Err(_) => panic!("SoftMax Loss sub compute failed"),
         };
 
         for (i, y) in label.iter().enumerate() {
@@ -195,13 +195,13 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
                 .map(|y| dscore[[i, to_primitive::<F>(y) as usize]] = dscore_sub[i].clone());
         }
 
-        let dscore = match div_chip.forward(
-            layouter.namespace(|| "SoftMax Loss Div forward"),
+        let dscore = match div_chip.compute(
+            layouter.namespace(|| "SoftMax Loss Div compute"),
             &vec![dscore.iter().collect(), vec![bs.as_ref(); dscore.len()]],
             &vec![zero.as_ref(), one.as_ref()],
         ) {
             Ok(output) => output,
-            Err(_) => panic!("SoftMax Loss div forward failed"),
+            Err(_) => panic!("SoftMax Loss div compute failed"),
         };
 
         Ok(Array::from_shape_vec(

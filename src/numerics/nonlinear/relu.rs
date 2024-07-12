@@ -85,7 +85,7 @@ impl<F: PrimeField> Numeric<F> for ReluChip<F> {
         <Self as NonLinearNumeric<F>>::compute_row(&self, region, row_offset, inputs, constants)
     }
 
-    fn forward(
+    fn compute(
         &self,
         mut layouter: impl halo2_proofs::circuit::Layouter<F>,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,

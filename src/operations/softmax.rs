@@ -95,41 +95,41 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
         let div_chip = DivChip::<F>::construct(self.numeric_config.clone());
         let acc_chip = AccumulatorChip::<F>::construct(self.numeric_config.clone());
 
-        let exp_out = match exp_chip.forward(
-            layouter.namespace(|| "Exp forward"),
+        let exp_out = match exp_chip.compute(
+            layouter.namespace(|| "Exp compute"),
             &vec![input.iter().map(|x| x.as_ref()).collect::<Vec<_>>()],
             &vec![zero.as_ref(), one.as_ref()],
         ) {
             Ok(output) => output,
-            Err(_) => panic!("Exp forward failed"),
+            Err(_) => panic!("Exp compute failed"),
         };
 
-        let exp_sum = match acc_chip.forward(
-            layouter.namespace(|| "Accumulator forward"),
+        let exp_sum = match acc_chip.compute(
+            layouter.namespace(|| "Accumulator compute"),
             &vec![exp_out.iter().collect()],
             &vec![zero.as_ref()],
         ) {
             Ok(output) => output,
-            Err(_) => panic!("Accumulator forward failed"),
+            Err(_) => panic!("Accumulator compute failed"),
         };
         let exp_sum = &exp_sum[0];
 
-        let exp_scaled = match mul_chip.forward(
-            layouter.namespace(|| "Mul forward"),
+        let exp_scaled = match mul_chip.compute(
+            layouter.namespace(|| "Mul compute"),
             &vec![exp_out.iter().collect(), vec![sf.as_ref(); input.len()]],
             &vec![zero.as_ref()],
         ) {
             Ok(output) => output,
-            Err(_) => panic!("Mul forward failed"),
+            Err(_) => panic!("Mul compute failed"),
         };
 
-        let output = match div_chip.forward(
-            layouter.namespace(|| "Div forward"),
+        let output = match div_chip.compute(
+            layouter.namespace(|| "Div compute"),
             &vec![exp_scaled.iter().collect(), vec![&exp_sum; input.len()]],
             &vec![zero.as_ref(), one.as_ref()],
         ) {
             Ok(output) => output,
-            Err(_) => panic!("Div forward failed"),
+            Err(_) => panic!("Div compute failed"),
         };
 
         Ok(vec![Array::from_shape_vec(

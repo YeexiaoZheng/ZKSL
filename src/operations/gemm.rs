@@ -121,7 +121,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
                     .map(|x| x.as_ref())
                     .collect::<Vec<_>>();
                 outputs.extend(
-                    match dot_chip.forward(
+                    match dot_chip.compute(
                         layouter.namespace(|| format!("dot_{}_{}", i, j)),
                         &vec![input, weight],
                         &constants,
@@ -134,7 +134,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
         }
 
         // Divide by scale factor because the output is scaled by scale factor * scale factor
-        let outputs = match div_chip.forward(
+        let outputs = match div_chip.compute(
             layouter.namespace(|| "div"),
             &vec![
                 outputs.iter().collect(),
@@ -199,7 +199,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
                     .map(|x| x.as_ref())
                     .collect::<Vec<_>>();
                 outgrad.extend(
-                    match dot_chip.forward(
+                    match dot_chip.compute(
                         layouter.namespace(|| format!("dot_{}_{}", i, j)),
                         &vec![inpgrad, weight],
                         &vec![zero.as_ref()],
@@ -226,7 +226,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
                     .map(|x| x.as_ref())
                     .collect::<Vec<_>>();
                 weight_grad.extend(
-                    match dot_chip.forward(
+                    match dot_chip.compute(
                         layouter.namespace(|| format!("dot_{}_{}", i, j)),
                         &vec![input, inpgrad],
                         &vec![zero.as_ref()],
@@ -239,7 +239,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
         }
 
         // Divide by scale factor because the output is scaled by scale factor * scale factor
-        let outgrad = match div_chip.forward(
+        let outgrad = match div_chip.compute(
             layouter.namespace(|| "div"),
             &vec![
                 outgrad.iter().collect(),
@@ -250,7 +250,7 @@ impl<F: PrimeField> Operation<F> for GemmChip<F> {
             Ok(output) => output,
             Err(e) => panic!("Error in GemmChip.div_chip: {:?}", e),
         };
-        let weight_grad = match div_chip.forward(
+        let weight_grad = match div_chip.compute(
             layouter.namespace(|| "div"),
             &vec![
                 weight_grad.iter().collect(),

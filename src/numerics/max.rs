@@ -148,7 +148,7 @@ impl<F: PrimeField> Numeric<F> for MaxChip<F> {
         Ok(res)
     }
 
-    fn forward(
+    fn compute(
         &self,
         mut layouter: impl halo2_proofs::circuit::Layouter<F>,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,

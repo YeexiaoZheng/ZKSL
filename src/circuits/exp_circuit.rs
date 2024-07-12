@@ -193,7 +193,7 @@ impl<F: PrimeField> Circuit<F> for ExpCircuit<F> {
 
         // Forward pass
         let outputs = exp_chip
-            .forward(
+            .compute(
                 layouter.namespace(|| "Exp"),
                 &vec![input.iter().collect()],
                 &vec![

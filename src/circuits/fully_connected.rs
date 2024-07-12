@@ -201,7 +201,7 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
                     .map(|x| x.as_ref())
                     .collect::<Vec<_>>();
                 let output = dot_chip
-                    .forward(
+                    .compute(
                         layouter.namespace(|| format!("dot_{}_{}", i, j)),
                         &vec![input, weight],
                         &vec![constants.get(&0).unwrap()],

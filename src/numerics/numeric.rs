@@ -137,8 +137,8 @@ pub trait Numeric<F: PrimeField> {
         )?)
     }
 
-    // Forward pass for the numeric operation.
-    fn forward(
+    // Computation for the numeric operation.
+    fn compute(
         &self,
         mut layouter: impl Layouter<F>,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,
