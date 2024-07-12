@@ -325,13 +325,22 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ModelCircuit<F> 
         let mut hash_outputs = vec![];
         if config.hasher.is_some() {
             let hasher = config.hasher.unwrap();
-            let weight = AssignedWeight::<F>::construct(self.graph.nodes.clone(), assigned_tensor_map.clone());
+            let weight = AssignedWeight::<F>::construct(
+                self.graph.nodes.clone(),
+                assigned_tensor_map.clone(),
+            );
             let mut weight_vec = weight.to_vec();
             while weight_vec.len() % RATE != 0 {
                 weight_vec.push(constants[&0].clone());
             }
             for chunk in weight_vec.chunks(RATE) {
-                let mut inputs = [chunk[0].as_ref().clone(), chunk[1].as_ref().clone(), chunk[2].as_ref().clone(), chunk[3].as_ref().clone(), chunk[4].as_ref().clone()];
+                let mut inputs = [
+                    chunk[0].as_ref().clone(),
+                    chunk[1].as_ref().clone(),
+                    chunk[2].as_ref().clone(),
+                    chunk[3].as_ref().clone(),
+                    chunk[4].as_ref().clone(),
+                ];
                 for (i, cell) in chunk.iter().enumerate() {
                     inputs[i] = cell.as_ref().clone();
                 }

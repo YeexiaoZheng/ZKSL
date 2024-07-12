@@ -8,7 +8,7 @@ use zkml::{
         helpers::{configure_static_numeric_config, to_field},
         loader::load_from_json,
     },
-    weight::{self, FieldWeight},
+    weight::FieldWeight,
 };
 
 type F = Fr;

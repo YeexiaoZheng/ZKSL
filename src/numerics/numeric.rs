@@ -72,9 +72,7 @@ pub struct NumericConfig {
     // selectors
     pub use_selectors: bool,
     pub selectors: HashMap<NumericType, Vec<Selector>>,
-
     // commitment
-
 }
 
 pub trait Numeric<F: PrimeField> {
