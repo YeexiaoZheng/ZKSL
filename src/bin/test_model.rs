@@ -1,7 +1,6 @@
-use halo2_poseidon::poseidon::{self, primitives::ConstantLength};
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use zkml::{
-    commitment::poseidon::PoseidonSpec,
+    commitment::poseidon::PoseidonHash,
     graph::Graph,
     model::ModelCircuit,
     utils::{
@@ -38,25 +37,7 @@ fn main() {
     }
 
     let weight = FieldWeight::<F>::construct(graph.nodes.clone(), circuit.field_tensor_map.clone());
-    let mut weight_vec = weight.to_vec();
-    const WIDTH: usize = 6;
-    const RATE: usize = 5;
-    while weight_vec.len() % RATE != 0 {
-        weight_vec.push(to_field::<F>(0));
-    }
-    let mut hash_output = vec![];
-    for chunk in weight_vec.chunks(RATE) {
-        hash_output.push(
-            poseidon::primitives::Hash::<
-                _,
-                PoseidonSpec<F, WIDTH, RATE>,
-                ConstantLength<RATE>,
-                WIDTH,
-                RATE,
-            >::init()
-            .hash(chunk.try_into().unwrap()),
-        )
-    }
+    let hash_output = PoseidonHash::<F>::hash_vec(weight.to_vec());
     // println!("hash_output: {:?}", hash_output);
 
     // Verify the circuit

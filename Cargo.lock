@@ -341,7 +341,6 @@ dependencies = [
 [[package]]
 name = "halo2_poseidon"
 version = "0.2.0"
-source = "git+https://github.com/privacy-scaling-explorations/poseidon-gadget#cb4f31fc4f701cd69800885688ff12777db36cf4"
 dependencies = [
  "arrayvec",
  "bitvec",

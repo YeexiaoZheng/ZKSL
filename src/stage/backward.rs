@@ -6,14 +6,19 @@ use std::{
 
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner},
-    halo2curves::ff::PrimeField,
+    halo2curves::ff::{FromUniformBytes, PrimeField},
     plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use ndarray::{Array, ShapeError};
 
 use crate::{
+    commitment::poseidon::FixedPoseidonChip,
     graph::Graph,
-    numerics::numeric::{NumericConfig, NumericType},
+    numerics::{
+        div::DivChip,
+        numeric::{Numeric, NumericConfig, NumericType},
+        sub::SubChip,
+    },
     operations::{
         gemm::GemmChip,
         none::NoneChip,
@@ -28,12 +33,13 @@ use crate::{
         },
         math::Int,
     },
+    weight::AssignedWeight,
 };
 
 use super::assign::Assign;
 
 #[derive(Clone, Debug)]
-pub struct BackwardCircuit<F: PrimeField> {
+pub struct BackwardCircuit<F: PrimeField + Ord + FromUniformBytes<64>> {
     pub graph: Graph,
     pub used_numerics: BTreeSet<NumericType>,
     pub field_tensor_map: HashMap<String, FieldTensor<F>>,
@@ -42,13 +48,14 @@ pub struct BackwardCircuit<F: PrimeField> {
 }
 
 #[derive(Clone, Debug)]
-pub struct BackwardConfig<F: PrimeField> {
+pub struct BackwardConfig<F: PrimeField + Ord + FromUniformBytes<64>> {
     pub numeric_config: Rc<NumericConfig>,
     pub public: Column<Instance>,
+    pub hasher: Option<FixedPoseidonChip<F>>,
     pub _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField> BackwardCircuit<F> {
+impl<F: PrimeField + Ord + FromUniformBytes<64>> BackwardCircuit<F> {
     pub fn construct(graph: Graph, lr: Int) -> Self {
         let mut used_numerics = BTreeSet::new();
         for node in graph.nodes.iter() {
@@ -122,9 +129,9 @@ impl<F: PrimeField> BackwardCircuit<F> {
     }
 }
 
-impl<F: PrimeField> Assign<F> for BackwardCircuit<F> {}
+impl<F: PrimeField + Ord + FromUniformBytes<64>> Assign<F> for BackwardCircuit<F> {}
 
-impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
+impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<F> {
     type Config = BackwardConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -156,8 +163,11 @@ impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
         };
 
         // Configure each numerics
-        let iter = <BTreeSet<NumericType> as Clone>::clone(&numeric_config.used_numerics.clone())
-            .into_iter();
+        // Add Sub and Div to the used numerics because they are used in the backward pass to update the weights
+        let mut used_numerics = numeric_config.used_numerics.as_ref().clone();
+        used_numerics.insert(NumericType::Sub);
+        used_numerics.insert(NumericType::Div);
+        let iter = <BTreeSet<NumericType> as Clone>::clone(&used_numerics).into_iter();
         for numeric_type in iter {
             numeric_config = match_configure(numeric_type)(meta, numeric_config);
         }
@@ -166,9 +176,13 @@ impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
         let public = meta.instance_column();
         meta.enable_equality(public);
 
+        // Create hasher
+        let hasher = FixedPoseidonChip::configure(meta, numeric_config.clone());
+
         BackwardConfig {
             numeric_config: Rc::new(numeric_config),
             public,
+            hasher,
             _marker: PhantomData,
         }
     }
@@ -186,6 +200,7 @@ impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
                 &self.field_tensor_map,
             )
             .unwrap();
+        let mut changed_tensor_map = assigned_tensor_map.clone();
 
         // Assign constants
         let constants = self
@@ -209,6 +224,25 @@ impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
                 ),
             }
         }
+
+        // Hash the original weights
+        let mut original_weight_hash_output = vec![];
+        if config.hasher.is_some() {
+            let hasher = config.hasher.as_ref().unwrap();
+            let weight = AssignedWeight::<F>::construct(
+                self.graph.nodes.clone(),
+                assigned_tensor_map.clone(),
+            );
+            original_weight_hash_output = hasher.hash_vec(
+                layouter.namespace(|| "hash_vec"),
+                weight.to_vec(),
+                constants[&0].clone(),
+            )?;
+        }
+
+        // Create the chips for updating the weights
+        let sub_chip = SubChip::<F>::construct(config.numeric_config.clone());
+        let div_chip = DivChip::<F>::construct(config.numeric_config.clone());
 
         // Run the circuit by each operation chips
         let mut res = assigned_tensor_map.get("gradient").unwrap().clone();
@@ -258,8 +292,58 @@ impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
             res = outputs[0].clone();
             // Insert the output to the assigned tensor map
             for (output_str, output) in op.backward_outputs.iter().zip(outputs.into_iter()) {
-                assigned_tensor_map.insert(output_str.clone(), output);
+                assigned_tensor_map.insert(output_str.clone(), output.clone());
+                // Update the weight
+                if output_str.contains(".grad") {
+                    let k = output_str
+                        .clone()
+                        .strip_suffix(".grad")
+                        .unwrap()
+                        .to_string();
+                    let weight = assigned_tensor_map.get(&k).unwrap();
+                    // let new_weight = weight.clone() - output.clone() / self.lr;
+                    let lr_output = div_chip
+                        .compute(
+                            layouter.namespace(|| "Update weight"),
+                            &vec![
+                                output.iter().map(|x| x.as_ref()).collect(),
+                                vec![constants[&self.lr].as_ref(); output.len()],
+                            ],
+                            &vec![constants[&0].as_ref(), constants[&1].as_ref()],
+                        )
+                        .unwrap();
+                    let new_weight = sub_chip
+                        .compute(
+                            layouter.namespace(|| "Update weight"),
+                            &vec![
+                                weight.iter().map(|x| x.as_ref()).collect(),
+                                lr_output.iter().collect(),
+                            ],
+                            &vec![constants[&0].as_ref()],
+                        )
+                        .unwrap();
+                    *changed_tensor_map.entry(k).or_insert(weight.clone()) = Array::from_shape_vec(
+                        weight.shape(),
+                        new_weight.into_iter().map(|x| Rc::new(x)).collect(),
+                    )
+                    .unwrap();
+                }
             }
+        }
+
+        // Hash the changed weights
+        let mut changed_weight_hash_output = vec![];
+        if config.hasher.is_some() {
+            let hasher = config.hasher.as_ref().unwrap();
+            let weight = AssignedWeight::<F>::construct(
+                self.graph.nodes.clone(),
+                changed_tensor_map.clone(),
+            );
+            changed_weight_hash_output = hasher.hash_vec(
+                layouter.namespace(|| "hash_vec"),
+                weight.to_vec(),
+                constants[&0].clone(),
+            )?;
         }
 
         // Constrain the output
@@ -268,6 +352,23 @@ impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
                 .constrain_instance(cell.as_ref().cell(), config.public, i)
                 .unwrap();
         }
+
+        // Constrain the hash output
+        if config.hasher.is_some() {
+            let offset = res.len();
+            for (i, cell) in original_weight_hash_output.iter().enumerate() {
+                layouter
+                    .constrain_instance(cell.cell(), config.public, i + offset)
+                    .unwrap();
+            }
+            let offset = res.len() + original_weight_hash_output.len();
+            for (i, cell) in changed_weight_hash_output.iter().enumerate() {
+                layouter
+                    .constrain_instance(cell.cell(), config.public, i + offset)
+                    .unwrap();
+            }
+        }
+
         Ok(())
     }
 }

@@ -6,6 +6,7 @@ use halo2_proofs::{
 };
 
 use zkml::{
+    commitment::poseidon::PoseidonHash,
     graph::Graph,
     loss::loss::LossType,
     stage::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit},
@@ -13,9 +14,10 @@ use zkml::{
         helpers::{configure_static_numeric_config, to_field, update_graph},
         loader::load_from_json,
     },
+    weight::{FieldWeight, Weight},
 };
 
-type F = Fp;
+type F = Fr;
 
 fn main() {
     // Parameters
@@ -65,11 +67,22 @@ fn main() {
             1,
             forward_circuit.clone().used_numerics.clone(),
         );
+
+        // Poseidon hash the forward weights
+        let weight = FieldWeight::<F>::construct(
+            forward_circuit.graph.nodes.clone(),
+            forward_circuit.field_tensor_map.clone(),
+        );
+        let hash_output = PoseidonHash::<F>::hash_vec(weight.to_vec());
+
         // Verify the circuit
-        let forward_public = score.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
+        let mut forward_public = score.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
+        forward_public.extend(hash_output);
         let forward_prover =
             MockProver::run(k as u32, &forward_circuit, vec![forward_public]).unwrap();
         assert_eq!(forward_prover.verify(), Ok(()));
+
+        println!("Forward circuit verified");
 
         // Set numeric config
         configure_static_numeric_config(
@@ -85,6 +98,8 @@ fn main() {
             MockProver::run(k as u32, &gradient_circuit, vec![gradient_public]).unwrap();
         assert_eq!(gradient_prover.verify(), Ok(()));
 
+        println!("Gradient circuit verified");
+
         // Set numeric config
         configure_static_numeric_config(
             k,
@@ -93,13 +108,31 @@ fn main() {
             1,
             backward_circuit.clone().used_numerics.clone(),
         );
+
+        // Poseidon hash the forward weights & backward weights
+        let forward_weight = FieldWeight::<F>::construct(
+            backward_circuit.graph.nodes.clone(),
+            backward_circuit.field_tensor_map.clone(),
+        );
+        let forward_hash_output = PoseidonHash::<F>::hash_vec(forward_weight.to_vec());
+        let backward_weight = Weight::construct(
+            backward_circuit.graph.nodes.clone(),
+            backward_circuit.graph.tensor_map.clone(),
+        );
+        let backward_weight = FieldWeight::<F>::construct_from_weight(backward_weight);
+        let backward_hash_output = PoseidonHash::<F>::hash_vec(backward_weight.to_vec());
+
         // Verify the circuit
-        let backward_public = backward_gradient
+        let mut backward_public = backward_gradient
             .iter()
             .map(|x| to_field(*x))
             .collect::<Vec<_>>();
+        backward_public.extend(forward_hash_output);
+        backward_public.extend(backward_hash_output);
         let backward_prover =
             MockProver::run(k as u32, &backward_circuit, vec![backward_public]).unwrap();
         assert_eq!(backward_prover.verify(), Ok(()));
+
+        println!("Backward circuit verified");
     }
 }

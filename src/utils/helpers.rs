@@ -47,6 +47,7 @@ pub fn configure_static_numeric_config(
         use_selectors: true,
         batch_size,
         used_numerics: Arc::new(used_numerics),
+        commitment: true,
         ..cloned
     };
 }

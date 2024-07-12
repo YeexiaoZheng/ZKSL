@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{
+    commitment::poseidon::FixedPoseidonChip,
     graph::Graph,
     numerics::numeric::{NumericConfig, NumericType},
     operations::{
@@ -20,11 +21,12 @@ use crate::{
             match_configure, match_consumer, match_forward, match_load_lookups, match_op_type,
         },
     },
+    weight::AssignedWeight,
 };
 
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner},
-    halo2curves::ff::PrimeField,
+    halo2curves::ff::{FromUniformBytes, PrimeField},
     plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use ndarray::{Array, ShapeError};
@@ -32,20 +34,21 @@ use ndarray::{Array, ShapeError};
 use super::assign::Assign;
 
 #[derive(Clone, Debug)]
-pub struct ForwardCircuit<F: PrimeField> {
+pub struct ForwardCircuit<F: PrimeField + Ord + FromUniformBytes<64>> {
     pub graph: Graph,
     pub used_numerics: BTreeSet<NumericType>,
     pub field_tensor_map: HashMap<String, FieldTensor<F>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct ForwardConfig<F: PrimeField> {
+pub struct ForwardConfig<F: PrimeField + Ord + FromUniformBytes<64>> {
     pub numeric_config: Rc<NumericConfig>,
     pub public: Column<Instance>,
+    pub hasher: Option<FixedPoseidonChip<F>>,
     pub _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField> ForwardCircuit<F> {
+impl<F: PrimeField + Ord + FromUniformBytes<64>> ForwardCircuit<F> {
     pub fn construct(graph: Graph) -> Self {
         let mut used_numerics = BTreeSet::new();
         for node in graph.nodes.iter() {
@@ -111,9 +114,9 @@ impl<F: PrimeField> ForwardCircuit<F> {
     }
 }
 
-impl<F: PrimeField> Assign<F> for ForwardCircuit<F> {}
+impl<F: PrimeField + Ord + FromUniformBytes<64>> Assign<F> for ForwardCircuit<F> {}
 
-impl<F: PrimeField> Circuit<F> for ForwardCircuit<F> {
+impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F> {
     type Config = ForwardConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -155,9 +158,13 @@ impl<F: PrimeField> Circuit<F> for ForwardCircuit<F> {
         let public = meta.instance_column();
         meta.enable_equality(public);
 
+        // Create hasher
+        let hasher = FixedPoseidonChip::configure(meta, numeric_config.clone());
+
         ForwardConfig {
             numeric_config: Rc::new(numeric_config),
             public,
+            hasher,
             _marker: PhantomData,
         }
     }
@@ -248,6 +255,29 @@ impl<F: PrimeField> Circuit<F> for ForwardCircuit<F> {
         for (i, cell) in output.iter().enumerate() {
             layouter
                 .constrain_instance(cell.as_ref().cell(), config.public, i)
+                .unwrap();
+        }
+
+        // Hash the weights
+        let mut hash_output = vec![];
+        if config.hasher.is_some() {
+            let hasher = config.hasher.as_ref().unwrap();
+            let weight = AssignedWeight::<F>::construct(
+                self.graph.nodes.clone(),
+                assigned_tensor_map.clone(),
+            );
+            hash_output = hasher.hash_vec(
+                layouter.namespace(|| "hash_vec"),
+                weight.to_vec(),
+                constants[&0].clone(),
+            )?;
+        }
+
+        // Constrain the hash output
+        let offset = output.len();
+        for (i, cell) in hash_output.iter().enumerate() {
+            layouter
+                .constrain_instance(cell.cell(), config.public, i + offset)
                 .unwrap();
         }
         Ok(())
