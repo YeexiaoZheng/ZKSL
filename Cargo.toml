@@ -7,7 +7,9 @@ edition = "2021"
 
 [dependencies]
 halo2 = { git="https://github.com/privacy-scaling-explorations/halo2", package="halo2" }
-halo2_proofs = { git="https://github.com/privacy-scaling-explorations/halo2", package="halo2_proofs" }
+halo2_proofs = { git="https://github.com/privacy-scaling-explorations/halo2", tag = "v0.3.0", package="halo2_proofs" }
+# halo2_curves ={ git="https://github.com/privacy-scaling-explorations/halo2curves", package = "halo2curves" }
+halo2_poseidon = { git="https://github.com/privacy-scaling-explorations/poseidon-gadget", package="halo2_poseidon" }
 lazy_static = "1.4.0"
 ndarray = "0.15.6"
 num-bigint = "0.4"

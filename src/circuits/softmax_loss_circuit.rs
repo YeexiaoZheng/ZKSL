@@ -3,7 +3,7 @@ use std::{collections::HashMap, marker::PhantomData, rc::Rc};
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
     halo2curves::ff::PrimeField,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, ErrorFront, Instance},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use ndarray::{Array, IxDyn, ShapeError};
 
@@ -68,7 +68,7 @@ impl<F: PrimeField> SoftMaxLossCircuit<F> {
                                 || Value::known(*cell),
                             )?))
                         })
-                        .collect::<Result<Vec<_>, ErrorFront>>()?,
+                        .collect::<Result<Vec<_>, Error>>()?,
                 ) {
                     Ok(x) => Ok(x),
                     Err(e) => panic!(
@@ -104,7 +104,7 @@ impl<F: PrimeField> SoftMaxLossCircuit<F> {
                         )?;
                         Ok(out)
                     })
-                    .collect::<Result<Vec<_>, ErrorFront>>()
+                    .collect::<Result<Vec<_>, Error>>()
             },
         )?)
     }
@@ -205,7 +205,7 @@ impl<F: PrimeField> Circuit<F> for SoftMaxLossCircuit<F> {
         &self,
         config: Self::Config,
         mut layouter: impl Layouter<F>,
-    ) -> Result<(), ErrorFront> {
+    ) -> Result<(), Error> {
         // Construct Exp chip
         let config_rc = config.numeric_config.clone();
         let softmax_loss_chip = SoftMaxLossChip::<F>::construct(config_rc.clone());

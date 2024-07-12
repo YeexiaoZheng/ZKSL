@@ -16,7 +16,7 @@ use crate::{
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner},
     halo2curves::ff::PrimeField,
-    plonk::{Circuit, Column, ConstraintSystem, ErrorFront, Instance},
+    plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use ndarray::{Array, ShapeError};
 
@@ -137,7 +137,7 @@ impl<F: PrimeField> Circuit<F> for GradientCircuit<F> {
         &self,
         config: Self::Config,
         mut layouter: impl Layouter<F>,
-    ) -> Result<(), ErrorFront> {
+    ) -> Result<(), Error> {
         // Assign tensors
         let assigned_score = self
             .assign_tensor(

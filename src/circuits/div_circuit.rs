@@ -3,7 +3,7 @@ use std::{collections::HashMap, marker::PhantomData, rc::Rc};
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
     halo2curves::ff::PrimeField,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, ErrorFront, Instance},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
 };
 
 use crate::{
@@ -58,7 +58,7 @@ impl<F: PrimeField> DivCircuit<F> {
                         )?;
                         Ok(out)
                     })
-                    .collect::<Result<Vec<_>, ErrorFront>>()
+                    .collect::<Result<Vec<_>, Error>>()
             },
         )?)
     }
@@ -142,7 +142,7 @@ impl<F: PrimeField> Circuit<F> for DivCircuit<F> {
         &self,
         config: Self::Config,
         mut layouter: impl Layouter<F>,
-    ) -> Result<(), ErrorFront> {
+    ) -> Result<(), Error> {
         // Construct div chip
         let config_rc = config.numeric_config.clone();
         let div_chip = DivChip::<F>::construct(config_rc.clone());

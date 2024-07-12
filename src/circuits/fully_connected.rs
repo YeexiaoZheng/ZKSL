@@ -3,7 +3,7 @@ use std::{collections::HashMap, marker::PhantomData, rc::Rc};
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
     halo2curves::ff::PrimeField,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, ErrorFront, Instance},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use ndarray::{s, Array, IxDyn};
 
@@ -58,7 +58,7 @@ impl<F: PrimeField> FullyConnectedCircuit<F> {
                                 || Value::known(*cell),
                             )?))
                         })
-                        .collect::<Result<Vec<_>, ErrorFront>>()?,
+                        .collect::<Result<Vec<_>, Error>>()?,
                 ) {
                     Ok(x) => Ok(x),
                     Err(e) => panic!(
@@ -153,7 +153,7 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
         &self,
         config: Self::Config,
         mut layouter: impl Layouter<F>,
-    ) -> Result<(), ErrorFront> {
+    ) -> Result<(), Error> {
         // Check input and weight shapes
         let input_shape = self.input.shape();
         let weight_shape = self.weight.shape();

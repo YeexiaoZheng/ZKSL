@@ -6,12 +6,13 @@ use std::{
 
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner, Value},
-    halo2curves::ff::PrimeField,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, ErrorFront, Instance},
+    halo2curves::ff::{FromUniformBytes, PrimeField},
+    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use ndarray::{Array, IxDyn, ShapeError};
 
 use crate::{
+    commitment::poseidon::{PoseidonChip, PoseidonSpec},
     graph::Graph,
     numerics::numeric::{NumericConfig, NumericType},
     operations::{
@@ -28,7 +29,11 @@ use crate::{
         },
         math::Int,
     },
+    weight::AssignedWeight,
 };
+
+const WIDTH: usize = 6;
+const RATE: usize = 5;
 
 #[derive(Clone, Debug)]
 pub struct ModelCircuit<F: PrimeField> {
@@ -38,9 +43,10 @@ pub struct ModelCircuit<F: PrimeField> {
 }
 
 #[derive(Clone, Debug)]
-pub struct ModelConfig<F: PrimeField> {
+pub struct ModelConfig<F: PrimeField + Ord + FromUniformBytes<64>> {
     pub numeric_config: Rc<NumericConfig>,
     pub public: Column<Instance>,
+    pub hasher: Option<PoseidonChip<F, PoseidonSpec<F, WIDTH, RATE>, WIDTH, RATE>>,
     pub _marker: PhantomData<F>,
 }
 
@@ -100,7 +106,7 @@ impl<F: PrimeField> ModelCircuit<F> {
                                     || Value::known(*cell),
                                 )?))
                             })
-                            .collect::<Result<Vec<_>, ErrorFront>>()?;
+                            .collect::<Result<Vec<_>, Error>>()?;
                         Ok((
                             key.clone(),
                             match Array::from_shape_vec(IxDyn(tensor.shape()), assigned_tensor) {
@@ -112,7 +118,7 @@ impl<F: PrimeField> ModelCircuit<F> {
                             },
                         ))
                     })
-                    .collect::<Result<HashMap<_, _>, ErrorFront>>()?;
+                    .collect::<Result<HashMap<_, _>, Error>>()?;
                 Ok(assigned_tensors)
             },
         )?)
@@ -172,7 +178,7 @@ impl<F: PrimeField> ModelCircuit<F> {
     }
 }
 
-impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
+impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ModelCircuit<F> {
     type Config = ModelConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -214,9 +220,22 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
         let public = meta.instance_column();
         meta.enable_equality(public);
 
+        let input: [Column<Advice>; RATE] = numeric_config.columns[0..RATE].try_into().unwrap();
+        let state: [Column<Advice>; WIDTH] = numeric_config.columns[RATE..RATE + WIDTH]
+            .try_into()
+            .unwrap();
+        let partial_sbox = numeric_config.columns[RATE + WIDTH].try_into().unwrap();
+
         ModelConfig {
-            numeric_config: Rc::new(numeric_config),
+            numeric_config: Rc::new(numeric_config.clone()),
             public,
+            hasher: PoseidonChip::<F, PoseidonSpec<F, WIDTH, RATE>, WIDTH, RATE>::configure(
+                numeric_config.clone(),
+                meta,
+                input.try_into().unwrap(),
+                state.try_into().unwrap(),
+                partial_sbox,
+            ),
             _marker: PhantomData,
         }
     }
@@ -225,7 +244,7 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
         &self,
         config: Self::Config,
         mut layouter: impl Layouter<F>,
-    ) -> Result<(), ErrorFront> {
+    ) -> Result<(), Error> {
         // Assign tensors
         let mut assigned_tensor_map = self
             .assign_tensor_map(
@@ -302,11 +321,38 @@ impl<F: PrimeField> Circuit<F> for ModelCircuit<F> {
             }
         }
 
+        // Constrain the weight hash
+        let mut hash_outputs = vec![];
+        if config.hasher.is_some() {
+            let hasher = config.hasher.unwrap();
+            let weight = AssignedWeight::<F>::construct(self.graph.nodes.clone(), assigned_tensor_map.clone());
+            let mut weight_vec = weight.to_vec();
+            while weight_vec.len() % RATE != 0 {
+                weight_vec.push(constants[&0].clone());
+            }
+            for chunk in weight_vec.chunks(RATE) {
+                let mut inputs = [chunk[0].as_ref().clone(), chunk[1].as_ref().clone(), chunk[2].as_ref().clone(), chunk[3].as_ref().clone(), chunk[4].as_ref().clone()];
+                for (i, cell) in chunk.iter().enumerate() {
+                    inputs[i] = cell.as_ref().clone();
+                }
+                let output = hasher.hash(layouter.namespace(|| "hasher"), inputs)?;
+                hash_outputs.push(output);
+            }
+        }
+        // println!("hash_outputs len: {:#?}", hash_outputs.len());
+        // println!("hash_outputs: {:?}", hash_outputs);
+
         // Constrain the output
         let output = assigned_tensor_map.get("output").unwrap().clone();
         for (i, cell) in output.iter().enumerate() {
             layouter
                 .constrain_instance(cell.as_ref().cell(), config.public, i)
+                .unwrap();
+        }
+
+        for (i, cell) in hash_outputs.iter().enumerate() {
+            layouter
+                .constrain_instance(cell.cell(), config.public, i + output.len())
                 .unwrap();
         }
         Ok(())

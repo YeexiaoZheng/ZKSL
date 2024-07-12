@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc};
 use halo2_proofs::{
     circuit::{Layouter, Value},
     halo2curves::ff::PrimeField,
-    plonk::{Advice, Column, Error, ErrorFront},
+    plonk::{Advice, Column, Error},
 };
 use ndarray::{Array, IxDyn};
 
@@ -42,7 +42,7 @@ pub trait Assign<F: PrimeField> {
                                     || Value::known(*cell),
                                 )?))
                             })
-                            .collect::<Result<Vec<_>, ErrorFront>>()?;
+                            .collect::<Result<Vec<_>, Error>>()?;
                         Ok((
                             key.clone(),
                             match Array::from_shape_vec(IxDyn(tensor.shape()), assigned_tensor) {
@@ -54,7 +54,7 @@ pub trait Assign<F: PrimeField> {
                             },
                         ))
                     })
-                    .collect::<Result<HashMap<_, _>, ErrorFront>>()?;
+                    .collect::<Result<HashMap<_, _>, Error>>()?;
                 Ok(assigned_tensors)
             },
         )?)
@@ -84,7 +84,7 @@ pub trait Assign<F: PrimeField> {
                         )?;
                         Ok(Rc::new(out))
                     })
-                    .collect::<Result<Vec<_>, ErrorFront>>()
+                    .collect::<Result<Vec<_>, Error>>()
             },
         )?)
     }
@@ -114,7 +114,7 @@ pub trait Assign<F: PrimeField> {
                                 || Value::known(*cell),
                             )?))
                         })
-                        .collect::<Result<Vec<_>, ErrorFront>>()?,
+                        .collect::<Result<Vec<_>, Error>>()?,
                 ) {
                     Ok(x) => Ok(x),
                     Err(e) => panic!(

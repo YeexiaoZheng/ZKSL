@@ -7,7 +7,7 @@ use std::{
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner},
     halo2curves::ff::PrimeField,
-    plonk::{Circuit, Column, ConstraintSystem, ErrorFront, Instance},
+    plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
 use ndarray::{Array, ShapeError};
 
@@ -177,7 +177,7 @@ impl<F: PrimeField> Circuit<F> for BackwardCircuit<F> {
         &self,
         config: Self::Config,
         mut layouter: impl Layouter<F>,
-    ) -> Result<(), ErrorFront> {
+    ) -> Result<(), Error> {
         // Assign tensors
         let mut assigned_tensor_map = self
             .assign_tensor_map(

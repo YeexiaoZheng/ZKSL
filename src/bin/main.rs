@@ -1,6 +1,9 @@
 use std::{collections::BTreeSet, vec};
 
-use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+use halo2_proofs::{
+    dev::MockProver,
+    halo2curves::{bn256::Fr, pasta::Fp},
+};
 
 use zkml::{
     graph::Graph,
@@ -12,14 +15,14 @@ use zkml::{
     },
 };
 
-type F = Fr;
+type F = Fp;
 
 fn main() {
     // Parameters
     let scale_factor = 1024;
     let k = 15;
     let num_cols = 12;
-    let lr = 20;
+    let lr = 1;
     let epoch = 20;
     configure_static_numeric_config(k, num_cols, scale_factor, 1, BTreeSet::new());
 
@@ -30,7 +33,7 @@ fn main() {
     for _ in 0..epoch {
         // Run forward circuit
         let _input = graph.tensor_map.get("input").unwrap().clone();
-        let mut forward_circuit = ForwardCircuit::<Fr>::construct(graph.clone());
+        let mut forward_circuit = ForwardCircuit::<F>::construct(graph.clone());
         let score = forward_circuit.run().unwrap();
         println!("score: {:?}", score);
 
@@ -46,7 +49,7 @@ fn main() {
         backward_graph
             .tensor_map
             .insert("gradient".to_string(), gradient.clone());
-        let mut backward_circuit = BackwardCircuit::<Fr>::construct(backward_graph.clone(), lr);
+        let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone(), lr);
         let backward_gradient = backward_circuit.run().unwrap();
         println!("backward_gradient: {:?}", backward_gradient);
         // println!("graph: {:#?}", backward_circuit.graph);
