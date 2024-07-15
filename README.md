@@ -66,14 +66,13 @@ To get started with ZKSL, follow these steps:
 
 1. **Clone the Repository**:
     ```bash
-    git clone https://github.com/yourusername/zksl.git
+    git clone https://github.com/yeexiaozheng/zksl.git
     cd zksl
     ```
 
-2. **Install Dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
+2. **Dependencies**:
+    - Install Rust: Follow the instructions on the [Rust website](https://www.rust-lang.org/tools/install) to install Rust on your system.
+    - Install Python: Ensure that you have Python 3.6 or higher installed on your system.
 
 3. **Run the Examples**:
     - Detailed examples for each stage can be found in the `examples` directory.

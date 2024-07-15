@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    commitment::poseidon::FixedPoseidonChip,
+    commitments::poseidon::FixedPoseidonChip,
     graph::Graph,
     numerics::numeric::{NumericConfig, NumericType},
     operations::{

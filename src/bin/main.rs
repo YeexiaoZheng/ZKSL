@@ -6,7 +6,7 @@ use halo2_proofs::{
 };
 
 use zkml::{
-    commitment::poseidon::PoseidonHash,
+    commitments::poseidon::PoseidonHash,
     graph::Graph,
     loss::loss::LossType,
     stage::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit},

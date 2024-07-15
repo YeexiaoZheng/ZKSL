@@ -12,7 +12,7 @@ use halo2_proofs::{
 use ndarray::{Array, ShapeError};
 
 use crate::{
-    commitment::poseidon::FixedPoseidonChip,
+    commitments::poseidon::FixedPoseidonChip,
     graph::Graph,
     numerics::{
         div::DivChip,

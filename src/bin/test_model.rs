@@ -1,6 +1,6 @@
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use zkml::{
-    commitment::poseidon::PoseidonHash,
+    commitments::poseidon::PoseidonHash,
     graph::Graph,
     model::ModelCircuit,
     utils::{
