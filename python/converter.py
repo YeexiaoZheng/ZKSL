@@ -8,7 +8,7 @@ parser.add_argument('-m', '--model', type=str, required=True, help='Path to the 
 parser.add_argument('-o', '--output', type=str, default="", help='Path to the output json file')
 args = parser.parse_args()
 model_path = args.model
-save_path = args.output if args.output else '../jsons/' + model_path.replace('.onnx', '.json')
+save_path = args.output if args.output else model_path.replace('.onnx', '.json')
 
 model = onnx.load(model_path)
 model_dict = {'tensor_map': {}, 'nodes': []}

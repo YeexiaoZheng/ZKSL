@@ -55,6 +55,7 @@ pub struct NumericConfig {
     pub k: usize,
     pub scale_factor: u64,
     pub batch_size: usize,
+    pub learning_rate: Int,
     pub num_rows: usize,
     pub num_cols: usize,
     pub min_val: Int,

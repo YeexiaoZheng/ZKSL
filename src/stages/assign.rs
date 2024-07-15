@@ -133,6 +133,7 @@ pub trait Assign<F: PrimeField> {
     ) -> Result<HashMap<Int, CellRc<F>>, Error> {
         let sf = config.scale_factor;
         let bs = config.batch_size;
+        let lr = config.learning_rate;
         // let min_val = config.min_val;
         // let max_val = config.max_val;
 
@@ -141,7 +142,9 @@ pub trait Assign<F: PrimeField> {
             |mut region| {
                 let mut constants: HashMap<Int, CellRc<F>> = HashMap::new();
 
-                let vals = vec![0 as Int, 1, sf as Int, bs as Int /*min_val, max_val*/];
+                let vals = vec![
+                    0 as Int, 1, sf as Int, bs as Int, lr as Int, /*min_val, max_val*/
+                ];
                 for (i, val) in vals.iter().enumerate() {
                     let cell = region.assign_fixed(
                         || format!("constant_{}", i),

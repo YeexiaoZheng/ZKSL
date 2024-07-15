@@ -52,6 +52,29 @@ pub fn configure_static_numeric_config(
     };
 }
 
+pub fn configure_static(numeric_config: NumericConfig) -> NumericConfig {
+    let nconfig = &NUMERIC_CONFIG;
+    let cloned = nconfig.lock().unwrap().clone();
+    let k = numeric_config.k;
+    // !IMPORTANT: To ensure that max_val - min_val = num_rows
+    let new_numeric_config = NumericConfig {
+        k,
+        scale_factor: numeric_config.scale_factor,
+        num_rows: (1 << k) - 10 + 1,
+        num_cols: numeric_config.num_cols,
+        min_val: -(1 << (k - 1)),
+        max_val: (1 << (k - 1)) - 10,
+        use_selectors: true,
+        batch_size: numeric_config.batch_size,
+        learning_rate: numeric_config.learning_rate,
+        used_numerics: numeric_config.used_numerics,
+        commitment: true,
+        ..cloned
+    };
+    *nconfig.lock().unwrap() = new_numeric_config.clone();
+    new_numeric_config
+}
+
 pub fn to_field<F: PrimeField>(x: Int) -> F {
     let bias = 1 << 60;
     let x_pos = x + bias;

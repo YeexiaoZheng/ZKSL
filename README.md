@@ -48,8 +48,9 @@ The ZKSL project is structured into three main stages, each representing a criti
 ### Operations
 
 - [x] GEMM
-- [x] ReLU
+- [ ] Conv
 - [ ] Concat
+- [x] ReLU
 - [x] Softmax
 
 ### Loss

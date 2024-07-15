@@ -266,11 +266,11 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
                 self.graph.nodes.clone(),
                 assigned_tensor_map.clone(),
             );
-            hash_output = hasher.hash_vec(
+            hash_output.push(hasher.hash_vec_to_one(
                 layouter.namespace(|| "hash_vec"),
                 weight.to_vec(),
                 constants[&0].clone(),
-            )?;
+            )?);
         }
 
         // Constrain the hash output

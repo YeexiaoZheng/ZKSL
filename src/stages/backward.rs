@@ -225,21 +225,6 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<
             }
         }
 
-        // Hash the original weights
-        let mut original_weight_hash_output = vec![];
-        if config.hasher.is_some() {
-            let hasher = config.hasher.as_ref().unwrap();
-            let weight = AssignedWeight::<F>::construct(
-                self.graph.nodes.clone(),
-                assigned_tensor_map.clone(),
-            );
-            original_weight_hash_output = hasher.hash_vec(
-                layouter.namespace(|| "hash_vec"),
-                weight.to_vec(),
-                constants[&0].clone(),
-            )?;
-        }
-
         // Create the chips for updating the weights
         let sub_chip = SubChip::<F>::construct(config.numeric_config.clone());
         let div_chip = DivChip::<F>::construct(config.numeric_config.clone());
@@ -301,7 +286,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<
                         .unwrap()
                         .to_string();
                     let weight = assigned_tensor_map.get(&k).unwrap();
-                    // let new_weight = weight.clone() - output.clone() / self.lr;
+                    // new_weight = weight - output / lr;
                     let lr_output = div_chip
                         .compute(
                             layouter.namespace(|| "Update weight"),
@@ -331,21 +316,6 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<
             }
         }
 
-        // Hash the changed weights
-        let mut changed_weight_hash_output = vec![];
-        if config.hasher.is_some() {
-            let hasher = config.hasher.as_ref().unwrap();
-            let weight = AssignedWeight::<F>::construct(
-                self.graph.nodes.clone(),
-                changed_tensor_map.clone(),
-            );
-            changed_weight_hash_output = hasher.hash_vec(
-                layouter.namespace(|| "hash_vec"),
-                weight.to_vec(),
-                constants[&0].clone(),
-            )?;
-        }
-
         // Constrain the output
         for (i, cell) in res.iter().enumerate() {
             layouter
@@ -353,16 +323,39 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<
                 .unwrap();
         }
 
+        let mut hash_output = vec![];
+        // Hash the original weights
+        if config.hasher.is_some() {
+            let hasher = config.hasher.as_ref().unwrap();
+            let weight = AssignedWeight::<F>::construct(
+                self.graph.nodes.clone(),
+                assigned_tensor_map.clone(),
+            );
+            hash_output.push(hasher.hash_vec_to_one(
+                layouter.namespace(|| "hash_vec"),
+                weight.to_vec(),
+                constants[&0].clone(),
+            )?);
+        }
+
+        // Hash the changed weights
+        if config.hasher.is_some() {
+            let hasher = config.hasher.as_ref().unwrap();
+            let weight = AssignedWeight::<F>::construct(
+                self.graph.nodes.clone(),
+                changed_tensor_map.clone(),
+            );
+            hash_output.push(hasher.hash_vec_to_one(
+                layouter.namespace(|| "hash_vec"),
+                weight.to_vec(),
+                constants[&0].clone(),
+            )?);
+        }
+
         // Constrain the hash output
         if config.hasher.is_some() {
             let offset = res.len();
-            for (i, cell) in original_weight_hash_output.iter().enumerate() {
-                layouter
-                    .constrain_instance(cell.cell(), config.public, i + offset)
-                    .unwrap();
-            }
-            let offset = res.len() + original_weight_hash_output.len();
-            for (i, cell) in changed_weight_hash_output.iter().enumerate() {
+            for (i, cell) in hash_output.iter().enumerate() {
                 layouter
                     .constrain_instance(cell.cell(), config.public, i + offset)
                     .unwrap();
