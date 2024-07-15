@@ -9,7 +9,7 @@ use zkml::{
     commitments::poseidon::PoseidonHash,
     graph::Graph,
     loss::loss::LossType,
-    stage::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit},
+    stages::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit},
     utils::{
         helpers::{configure_static_numeric_config, to_field, update_graph},
         loader::load_from_json,

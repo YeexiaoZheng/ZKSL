@@ -2,7 +2,7 @@ use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use ndarray::Array;
 use zkml::{
     loss::loss::LossType,
-    stage::gradient::GradientCircuit,
+    stages::gradient::GradientCircuit,
     utils::helpers::{configure_static_numeric_config, to_field},
 };
 

@@ -2,7 +2,7 @@ use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use zkml::{
     commitments::poseidon::PoseidonHash,
     graph::Graph,
-    stage::forward::ForwardCircuit,
+    stages::forward::ForwardCircuit,
     utils::{
         helpers::{configure_static_numeric_config, to_field},
         loader::load_from_json,

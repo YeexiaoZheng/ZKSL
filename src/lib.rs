@@ -9,4 +9,4 @@ pub mod commitments;
 pub mod loss;
 pub mod numerics;
 pub mod operations;
-pub mod stage;
+pub mod stages;
