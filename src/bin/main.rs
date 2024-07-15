@@ -40,6 +40,7 @@ fn main() {
 
     for e in 0..epoch {
         println!("----- epoch: {:?} -----", e);
+        let start = std::time::Instant::now();
 
         /* Run forward circuit */
         let _input = graph.tensor_map.get("input").unwrap().clone();
@@ -131,5 +132,6 @@ fn main() {
 
         // Update graph (mainly the weights)
         graph = update_graph(&graph, &backward_circuit.graph.tensor_map);
+        println!("----- epoch cost time: {:?} -----", start.elapsed());
     }
 }
