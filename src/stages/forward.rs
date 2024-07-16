@@ -100,7 +100,16 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> ForwardCircuit<F> {
                 &node
                     .inputs
                     .iter()
-                    .map(|x| self.graph.tensor_map.get(x).unwrap().clone())
+                    .map(|x| {
+                        match self.graph.tensor_map.get(x) {
+                            Some(x) => x.clone(),
+                            None => panic!(
+                                "Error occurs at ForwardCircuit.run: tensor '{}' not found",
+                                x
+                            ),
+                        }
+                        .clone()
+                    })
                     .collect::<Vec<Tensor>>(),
                 &numeric_config,
                 &node.attributes,

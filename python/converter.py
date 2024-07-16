@@ -25,7 +25,7 @@ for tensor in model.graph.initializer:
 # Constuct input/output shape
 model_dict['input_shape'] = [[dim.dim_value for dim in input.type.tensor_type.shape.dim] for input in model.graph.input][0]
 model_dict['output_shape'] = [[dim.dim_value for dim in output.type.tensor_type.shape.dim] for output in model.graph.output][0]
-model_dict['tensor_map']['input'] = {'shape': model_dict['input_shape'], 'data': np.random.rand(10).tolist()}
+# model_dict['tensor_map']['input'] = {'shape': model_dict['input_shape'], 'data': np.random.rand(10).tolist()}
 
 # Constuct node list
 for node in model.graph.node:

@@ -42,3 +42,21 @@ pub fn load_from_json(file_path: &str) -> GraphJson {
         }
     }
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Input {
+    pub data: Vec<f64>,
+    pub label: i64,
+}
+
+pub fn load_input_from_json(file_path: &str) -> Vec<Input> {
+    let file = File::open(file_path).unwrap();
+    let reader = BufReader::new(file);
+    match serde_json::from_reader(reader) {
+        Ok(inputs) => inputs,
+        Err(e) => {
+            eprintln!("Error: {}", e);
+            panic!("Failed to load input from json! ")
+        }
+    }
+}

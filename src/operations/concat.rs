@@ -58,7 +58,11 @@ impl<F: PrimeField> Operation<F> for ConcatChip<F> {
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         // TODO: fix this: Axis(1) is hardcoded
         // TODO: fix this: concatenate! is not in circuit!
-        Ok(vec![concatenate![Axis(1), inputs[0].clone(), inputs[1].clone()]])
+        Ok(vec![concatenate![
+            Axis(1),
+            inputs[0].clone(),
+            inputs[1].clone()
+        ]])
     }
 
     fn backward(

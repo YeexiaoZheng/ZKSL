@@ -4,7 +4,7 @@ use ndarray::IxDyn;
 
 use crate::utils::{
     helpers::Tensor,
-    loader::{GraphJson, NodeJson},
+    loader::{GraphJson, Input, NodeJson},
     math::Int,
 };
 
@@ -71,5 +71,30 @@ impl Graph {
             todo!();
         }
         Tensor::from_shape_vec(IxDyn(&[1, 2]), vec![1, 2]).unwrap()
+    }
+}
+
+pub struct GraphInput {
+    pub data: Tensor,
+    pub label: Int,
+}
+
+impl GraphInput {
+    pub fn construct(inputs: Vec<Input>, scale_factor: u64) -> Vec<Self> {
+        inputs
+            .iter()
+            .map(|input| Self {
+                data: Tensor::from_shape_vec(
+                    IxDyn(&[1, input.data.len()]),
+                    input
+                        .data
+                        .iter()
+                        .map(|x| ((x * scale_factor as f64) as Int))
+                        .collect(),
+                )
+                .unwrap(),
+                label: input.label as Int,
+            })
+            .collect()
     }
 }
