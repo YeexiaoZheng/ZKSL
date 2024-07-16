@@ -30,8 +30,12 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
 
     fn get_val_in_map(&self, key: Int) -> Int {
         match self.get_numeric_config().maps.get(&self.get_numeric_type()) {
-            Some(map) => map[0].get(&key).unwrap().clone(),
-            None => panic!("Map is not found"),
+            Some(map) => match map[0].get(&key) {
+                Some(val) => *val,
+                None => panic!("Value '{}' not found in map", key),
+            }
+            .clone(),
+            None => panic!("Map {:?} is not found", self.get_numeric_type()),
         }
     }
 

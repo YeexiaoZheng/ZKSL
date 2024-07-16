@@ -102,7 +102,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> BackwardCircuit<F> {
                     .iter()
                     .map(|x| match self.graph.tensor_map.get(x) {
                         Some(x) => x.clone(),
-                        None => panic!("Tensor not found: {}", x),
+                        None => panic!("Tensor not found: '{}'", x),
                     })
                     .collect::<Vec<Tensor>>(),
                 &numeric_config,

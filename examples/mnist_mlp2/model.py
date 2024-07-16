@@ -5,8 +5,10 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
 
 # 超参数设置
-input_size = 784  # MNIST数据集的输入尺寸是28x28
-hidden_size = 128  # 隐藏层神经元个数
+input_size = 28*28  # MNIST数据集的输入尺寸是28x28
+cut_input_size = 200  # 裁剪的输入尺寸
+start = int((input_size - cut_input_size) / 2) # 裁剪的起始位置
+hidden_size = 28  # 隐藏层神经元个数
 num_classes = 10  # MNIST数据集的类别数
 num_epochs = 5  # 训练轮数
 batch_size = 100  # 每个批次的样本数
@@ -41,7 +43,7 @@ class NeuralNet(nn.Module):
         out = self.softmax(out)
         return out
 
-model = NeuralNet(input_size, hidden_size, num_classes)
+model = NeuralNet(cut_input_size, hidden_size, num_classes)
 
 # 定义损失函数和优化器
 criterion = nn.CrossEntropyLoss()
@@ -52,7 +54,7 @@ total_step = len(train_loader)
 for epoch in range(num_epochs):
     for i, (images, labels) in enumerate(train_loader):
         # 将图像展平
-        images = images.view(-1, 28*28)
+        images = images.view(-1, 28*28)[:, start:start + cut_input_size]
         
         # 前向传播
         outputs = model(images)
@@ -72,7 +74,7 @@ with torch.no_grad():
     correct = 0
     total = 0
     for images, labels in test_loader:
-        images = images.view(-1, 28*28)
+        images = images.view(-1, 28*28)[:, start:start + cut_input_size]
         outputs = model(images)
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
@@ -81,7 +83,7 @@ with torch.no_grad():
     print(f'Accuracy of the model on the 10000 test images: {100 * correct / total:.2f}%')
 
 # 保存模型为ONNX格式
-dummy_input = torch.randn(1, 28*28)  # 生成一个随机的输入样本
+dummy_input = torch.randn(1, cut_input_size)  # 生成一个随机的输入样本
 torch.onnx.export(model, dummy_input, "model.onnx", input_names=['input'], output_names=['output'], verbose=True)
 
 print("Model has been converted to ONNX format and saved as model.onnx")

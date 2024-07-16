@@ -12,12 +12,15 @@ transform = transforms.Compose([
 mnist_dataset = datasets.MNIST(root='./data', train=True, transform=transform, download=True)
 
 # 取出前100个样本
-num_samples = 100
+num_samples = 10
+input_size = 28*28
+cut_input_size = 200
+start = int((input_size - cut_input_size) / 2)
 data = []
 
 for i in range(num_samples):
     image, label = mnist_dataset[i]
-    image = image.view(-1).numpy().tolist()  # 将图像展平并转换为列表
+    image = image.view(-1).numpy().tolist()[start:start + cut_input_size]  # 将图像展平并转换为列表
     data.append({"data": image, "label": label})
 
 # 保存为JSON文件
