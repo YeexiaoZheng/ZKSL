@@ -1,10 +1,9 @@
-use std::collections::BTreeSet;
 
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
-use zkml::{
+use zksl::{
     circuits::div_circuit::DivCircuit,
     utils::{
-        helpers::{configure_static_numeric_config, to_field},
+        helpers::{configure_static_numeric_config_default, to_field},
         math::Int,
     },
 };
@@ -32,12 +31,9 @@ fn main() {
 
     let circuit = DivCircuit::construct(f_input1, f_input2);
 
-    let k = 10;
-    let scale_factor = 1;
+    let numeric_config = configure_static_numeric_config_default();
 
-    configure_static_numeric_config(k, 12, scale_factor, 1, BTreeSet::new());
-
-    let prover = MockProver::run(k as u32, &circuit, vec![f_output]).unwrap();
+    let prover = MockProver::run(numeric_config.k as u32, &circuit, vec![f_output]).unwrap();
 
     assert_eq!(prover.verify(), Ok(()));
 }

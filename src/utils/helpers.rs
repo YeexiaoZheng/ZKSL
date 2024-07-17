@@ -30,6 +30,7 @@ lazy_static! {
 pub fn configure_static_numeric_config(
     k: usize,
     num_cols: usize,
+    max_val: Int,
     scale_factor: u64,
     batch_size: usize,
     used_numerics: BTreeSet<NumericType>,
@@ -42,8 +43,8 @@ pub fn configure_static_numeric_config(
         scale_factor,
         num_rows: (1 << k) - 10 + 1,
         num_cols,
-        min_val: -(1 << (k - 1)),
-        max_val: (1 << (k - 1)) - 10,
+        max_val,
+        min_val: -(max_val + 1),
         use_selectors: true,
         batch_size,
         used_numerics: Arc::new(used_numerics),
@@ -62,12 +63,34 @@ pub fn configure_static(numeric_config: NumericConfig) -> NumericConfig {
         scale_factor: numeric_config.scale_factor,
         num_rows: (1 << k) - 10 + 1,
         num_cols: numeric_config.num_cols,
-        min_val: -(1 << (k - 1)),
-        max_val: (1 << (k - 1)) - 10,
+        max_val: numeric_config.max_val,
+        min_val: -(numeric_config.max_val + 1),
         use_selectors: true,
         batch_size: numeric_config.batch_size,
         learning_rate: numeric_config.learning_rate,
         used_numerics: numeric_config.used_numerics,
+        commitment: true,
+        ..cloned
+    };
+    *nconfig.lock().unwrap() = new_numeric_config.clone();
+    new_numeric_config
+}
+
+pub fn configure_static_numeric_config_default() -> NumericConfig {
+    let nconfig = &NUMERIC_CONFIG;
+    let cloned = nconfig.lock().unwrap().clone();
+    let k = 15;
+    let new_numeric_config = NumericConfig {
+        k,
+        scale_factor: 1024,
+        num_rows: (1 << k) - 10 + 1,
+        num_cols: (1 << k) - 10 + 1,
+        max_val: (1 << (k - 1)) - 1,
+        min_val: -(1 << (k - 1)),
+        use_selectors: true,
+        use_batch: false,
+        batch_size: 1,
+        learning_rate: 1,
         commitment: true,
         ..cloned
     };

@@ -1,10 +1,7 @@
-use halo2_proofs::{
-    dev::MockProver,
-    halo2curves::pasta::Fp,
-};
+use halo2_proofs::{dev::MockProver, halo2curves::pasta::Fp};
 
 use ndarray::{Array, IxDyn};
-use zkml::{
+use zksl::{
     commitments::poseidon::PoseidonHash,
     graph::{Graph, GraphInput},
     loss::loss::LossType,

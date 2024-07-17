@@ -51,16 +51,13 @@ pub struct _NumericConfig {
 pub struct NumericConfig {
     pub used_numerics: Arc<BTreeSet<NumericType>>,
 
-    // params
+    // circuit params
     pub k: usize,
     pub scale_factor: u64,
-    pub batch_size: usize,
-    pub learning_rate: Int,
     pub num_rows: usize,
     pub num_cols: usize,
-    pub min_val: Int,
     pub max_val: Int,
-    pub shift_min_val: Int,
+    pub min_val: Int,
 
     // columns
     pub columns: Vec<Column<Advice>>,
@@ -76,6 +73,11 @@ pub struct NumericConfig {
 
     // commitment
     pub commitment: bool,
+
+    // learning params
+    pub use_batch: bool,
+    pub batch_size: usize,
+    pub learning_rate: Int,
 }
 
 pub trait Numeric<F: PrimeField> {

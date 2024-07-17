@@ -1,6 +1,6 @@
 use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use ndarray::{Array, Dim, IxDyn};
-use zkml::{
+use zksl::{
     circuits::fully_connected::FullyConnectedCircuit, numerics::numeric::NumericConfig,
     utils::helpers::NUMERIC_CONFIG,
 };

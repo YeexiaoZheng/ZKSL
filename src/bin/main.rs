@@ -3,7 +3,7 @@ use halo2_proofs::{
     halo2curves::{bn256::Fr, pasta::Fp},
 };
 
-use zkml::{
+use zksl::{
     commitments::poseidon::PoseidonHash,
     graph::Graph,
     loss::loss::LossType,
