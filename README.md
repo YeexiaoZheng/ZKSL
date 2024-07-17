@@ -61,6 +61,10 @@ The ZKSL project is structured into three main stages, each representing a criti
 - [x] Poseidon
 - [ ] Sha256
 
+### Provers
+- [x] KZG
+- [ ] IPA
+
 ## ONNX Model Integration
 The project uses ONNX (Open Neural Network Exchange) models as the standard input. ONNX is an open format built to represent machine learning models. It enables interoperability between different machine learning frameworks, allowing models to be trained in one framework and then transferred to another for inference. This flexibility makes ONNX an ideal choice for ZKSL.
 
