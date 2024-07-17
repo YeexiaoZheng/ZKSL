@@ -14,7 +14,7 @@ mnist_dataset = datasets.MNIST(root='./data', train=True, transform=transform, d
 # 取出前100个样本
 num_samples = 10
 input_size = 28*28
-cut_input_size = 200
+cut_input_size = 28*28
 start = int((input_size - cut_input_size) / 2)
 data = []
 

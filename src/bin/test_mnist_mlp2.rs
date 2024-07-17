@@ -19,7 +19,7 @@ type F = Fp;
 fn main() {
     // Parameters
     let scale_factor = 1024;
-    let k = 16;
+    let k = 20;
     let num_cols = 12;
     let batch_size = 10;
     let lr = 100;
@@ -27,6 +27,9 @@ fn main() {
     let numeric_config = configure_static(NumericConfig {
         k,
         num_cols,
+        num_rows: 1 << k - 10 + 1,
+        max_val: 1 << 16 - 1,
+        min_val: -(1 << 16),
         scale_factor,
         batch_size,
         learning_rate: lr,

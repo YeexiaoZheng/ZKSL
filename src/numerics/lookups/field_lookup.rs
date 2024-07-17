@@ -8,7 +8,7 @@ use halo2_proofs::{
 
 use crate::{
     numerics::numeric::{Numeric, NumericConfig, NumericType},
-    utils::{helpers::to_field, math::Int},
+    utils::helpers::to_field,
 };
 
 pub struct FieldLookUpChip<F: PrimeField> {
@@ -43,12 +43,11 @@ impl<F: PrimeField> FieldLookUpChip<F> {
         layouter.assign_table(
             || "field input lookup",
             |mut table| {
-                for i in 0..self.numeric_config.num_rows {
-                    let x = i as Int + self.numeric_config.min_val;
+                for x in self.numeric_config.min_val..self.numeric_config.max_val {
                     table.assign_cell(
                         || "field lookup cell",
                         lookup,
-                        i,
+                        (x - self.numeric_config.min_val) as usize,
                         || Value::known(to_field::<F>(x)),
                     )?;
                 }

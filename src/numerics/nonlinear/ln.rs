@@ -41,10 +41,9 @@ impl<F: PrimeField> LnChip<F> {
 }
 
 impl<F: PrimeField> NonLinearNumeric<F> for LnChip<F> {
-    fn generate_map(scale_factor: u64, min_val: Int, num_rows: Int) -> HashMap<Int, Int> {
-        (0..num_rows)
-            .map(|i| {
-                let x = i + min_val;
+    fn generate_map(scale_factor: u64, min_val: Int, max_val: Int) -> HashMap<Int, Int> {
+        (min_val..max_val)
+            .map(|x| {
                 let ln = ln(x, scale_factor);
                 (x, ln)
             })

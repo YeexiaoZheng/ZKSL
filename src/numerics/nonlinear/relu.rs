@@ -40,12 +40,9 @@ impl<F: PrimeField> ReluChip<F> {
 }
 
 impl<F: PrimeField> NonLinearNumeric<F> for ReluChip<F> {
-    fn generate_map(_scale_factor: u64, min_val: Int, num_rows: Int) -> HashMap<Int, Int> {
-        (0..num_rows)
-            .map(|idx| {
-                let x = idx + min_val;
-                (x, relu(x))
-            })
+    fn generate_map(_scale_factor: u64, min_val: Int, max_val: Int) -> HashMap<Int, Int> {
+        (min_val..max_val)
+            .map(|x| (x, relu(x)))
             .collect::<HashMap<_, _>>()
     }
 

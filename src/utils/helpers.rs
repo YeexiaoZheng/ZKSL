@@ -37,7 +37,7 @@ pub fn configure_static_numeric_config(
 ) {
     let nconfig = &NUMERIC_CONFIG;
     let cloned = nconfig.lock().unwrap().clone();
-    // To ensure that max_val - min_val = num_rows
+    // To ensure that max_val - min_val < num_rows
     *nconfig.lock().unwrap() = NumericConfig {
         k,
         scale_factor,

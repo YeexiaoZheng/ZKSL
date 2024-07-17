@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 
 # 超参数设置
 input_size = 28*28  # MNIST数据集的输入尺寸是28x28
-cut_input_size = 200  # 裁剪的输入尺寸
+cut_input_size = 28*28  # 裁剪的输入尺寸
 start = int((input_size - cut_input_size) / 2) # 裁剪的起始位置
 hidden_size = 28  # 隐藏层神经元个数
 num_classes = 10  # MNIST数据集的类别数

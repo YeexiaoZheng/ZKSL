@@ -22,7 +22,7 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         NUM_LOOKUP_COLS_PER_OP
     }
 
-    fn generate_map(scale_factor: u64, min_val: Int, num_rows: Int) -> HashMap<Int, Int>;
+    fn generate_map(scale_factor: u64, min_val: Int, max_val: Int) -> HashMap<Int, Int>;
 
     fn get_numeric_config(&self) -> Rc<NumericConfig>;
 
@@ -93,7 +93,7 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
         let non_linear_map = Self::generate_map(
             numeric_config.scale_factor,
             numeric_config.min_val,
-            numeric_config.num_rows as Int,
+            numeric_config.max_val,
         );
         maps.insert(numeric_type, vec![non_linear_map]);
 
@@ -115,13 +115,13 @@ pub trait NonLinearNumeric<F: PrimeField>: Numeric<F> {
             || "non-linear table",
             |mut table| {
                 // println!("Loading non-linear table");
-                for i in 0..config.num_rows {
-                    let x = i as Int + config.min_val;
+                for x in config.min_val..config.max_val {
+                    let i = x - config.min_val;
                     let val = to_field::<F>(self.get_val_in_map(x));
                     table.assign_cell(
                         || "non-linear cell",
                         output_lookup,
-                        i,
+                        i as usize,
                         || Value::known(val),
                     )?;
                 }

@@ -40,7 +40,8 @@ impl<F: PrimeField> RowLookUpChip<F> {
         layouter.assign_table(
             || "row input lookup",
             |mut table| {
-                for i in 0..self.numeric_config.num_rows {
+                for x in self.numeric_config.min_val..self.numeric_config.max_val {
+                    let i = (x - self.numeric_config.min_val) as usize;
                     table.assign_cell(
                         || "mod lookup",
                         lookup,
