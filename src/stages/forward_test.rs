@@ -18,11 +18,15 @@ mod tests {
 
     #[test]
     fn test_forward() {
-        // config default numeric config
-        let numeric_config = configure_static_numeric_config_default();
+        // Config default numeric config
+        let numeric_config = configure_static(NumericConfig {
+            commitment: false,
+            ..configure_static_numeric_config_default()
+        });
 
+        // Load test graph
         let graph = Graph::construct(
-            load_from_json("./utils/test.json"),
+            load_from_json("src/utils/test.json"),
             numeric_config.scale_factor,
         );
         let mut circuit = ForwardCircuit::<F>::construct(graph.clone());

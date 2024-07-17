@@ -16,10 +16,11 @@ mod tests {
 
     #[test]
     fn test_gradient() {
-        // config default numeric config
+        // Config default numeric config
         let numeric_config = configure_static_numeric_config_default();
 
-        let score = Array::from_shape_vec((1, 2), vec![300, 700])
+        // Simulate an input and build a circuit
+        let score = Array::from_shape_vec((1, 2), vec![30, 70])
             .unwrap()
             .into_dyn();
         let label = vec![0];

@@ -258,7 +258,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
             for (op, output) in op.outputs.iter().zip(outputs.into_iter()) {
                 assigned_tensor_map.insert(op.clone(), output);
             }
-            println!("forward compute successfully!");
+            println!("forward circuit compute successfully!");
             // println!("{:?}", layouter.)
         }
 
@@ -273,6 +273,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
         // Hash the weights
         let mut hash_output = vec![];
         if config.hasher.is_some() {
+            println!("hashing the weights...");
             let hasher = config.hasher.as_ref().unwrap();
             let weight = AssignedWeight::<F>::construct(
                 self.graph.nodes.clone(),
@@ -287,10 +288,12 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
 
         // Constrain the hash output
         let offset = output.len();
-        for (i, cell) in hash_output.iter().enumerate() {
-            layouter
-                .constrain_instance(cell.cell(), config.public, i + offset)
-                .unwrap();
+        if config.hasher.is_some() {
+            for (i, cell) in hash_output.iter().enumerate() {
+                layouter
+                    .constrain_instance(cell.cell(), config.public, i + offset)
+                    .unwrap();
+            }
         }
         Ok(())
     }

@@ -213,3 +213,37 @@ impl<F: PrimeField> Circuit<F> for ExpCircuit<F> {
         Ok(())
     }
 }
+
+#[test]
+fn test_exp_circuit() {
+    use crate::utils::helpers::configure_static_numeric_config_default;
+    use crate::utils::math::exp;
+    use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+
+    let numeric_config = configure_static_numeric_config_default();
+
+    // original vector
+    let v_input: Vec<Int> = vec![0, 1, 2, 3, 4, 100];
+    let v_output: Vec<Int> = v_input
+        .iter()
+        .map(|x| exp(*x, numeric_config.scale_factor))
+        .collect();
+    println!("v_input: {:?}", v_input);
+    println!("v_output: {:?}", v_output);
+
+    // field vector
+    let f_input = v_input
+        .iter()
+        .map(|x| to_field::<Fr>(*x))
+        .collect::<Vec<_>>();
+    let f_output = v_output
+        .iter()
+        .map(|x| to_field::<Fr>(*x))
+        .collect::<Vec<_>>();
+
+    let circuit = ExpCircuit::construct(f_input);
+
+    let prover = MockProver::run(numeric_config.k as u32, &circuit, vec![f_output]).unwrap();
+
+    assert_eq!(prover.verify(), Ok(()));
+}

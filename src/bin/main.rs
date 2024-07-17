@@ -1,7 +1,4 @@
-use halo2_proofs::{
-    dev::MockProver,
-    halo2curves::{bn256::Fr, pasta::Fp},
-};
+use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 
 use zksl::{
     commitments::poseidon::PoseidonHash,
