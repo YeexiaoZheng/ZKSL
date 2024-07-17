@@ -40,11 +40,11 @@ use super::assign::Assign;
 
 #[derive(Clone, Debug)]
 pub struct BackwardCircuit<F: PrimeField + Ord + FromUniformBytes<64>> {
+    pub k: usize,
+    pub lr: Int,
     pub graph: Graph,
     pub used_numerics: BTreeSet<NumericType>,
     pub field_tensor_map: HashMap<String, FieldTensor<F>>,
-    pub lr: Int,
-    pub field_lr: F,
 }
 
 #[derive(Clone, Debug)]
@@ -56,7 +56,7 @@ pub struct BackwardConfig<F: PrimeField + Ord + FromUniformBytes<64>> {
 }
 
 impl<F: PrimeField + Ord + FromUniformBytes<64>> BackwardCircuit<F> {
-    pub fn construct(graph: Graph, lr: Int) -> Self {
+    pub fn construct(graph: Graph, numeric_config: &NumericConfig) -> Self {
         let mut used_numerics = BTreeSet::new();
         for node in graph.nodes.iter() {
             let op_type = match_op_type(node.op_type.clone());
@@ -78,11 +78,11 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> BackwardCircuit<F> {
             })
             .collect();
         Self {
+            k: numeric_config.k,
+            lr: numeric_config.learning_rate,
             graph,
             used_numerics,
             field_tensor_map,
-            lr,
-            field_lr: to_field::<F>(lr),
         }
     }
 

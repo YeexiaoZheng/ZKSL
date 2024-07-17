@@ -126,6 +126,7 @@ pub trait Assign<F: PrimeField> {
         )?)
     }
 
+    // For some hal2 horizon bug, we need to assign constants in two steps
     fn assign_constants(
         &self,
         mut layouter: impl Layouter<F>,
@@ -137,7 +138,7 @@ pub trait Assign<F: PrimeField> {
         // let min_val = config.min_val;
         // let max_val = config.max_val;
 
-        Ok(layouter.assign_region(
+        let fixed_constants = layouter.assign_region(
             || "constants",
             |mut region| {
                 let mut constants: HashMap<Int, CellRc<F>> = HashMap::new();
@@ -157,6 +158,35 @@ pub trait Assign<F: PrimeField> {
 
                 Ok(constants)
             },
-        )?)
+        )?;
+
+        let advice_constants = layouter.assign_region(
+            || "advice_constants",
+            |mut region| {
+                let mut constants: HashMap<Int, CellRc<F>> = HashMap::new();
+
+                let vals = vec![0 as Int, 1, sf as Int, bs as Int, lr as Int];
+                for (i, val) in vals.iter().enumerate() {
+                    let row_idx = i / config.columns.len();
+                    let col_idx = i % config.columns.len();
+                    let cell = region.assign_advice(
+                        || format!("constant_{}", i),
+                        config.columns[col_idx],
+                        row_idx,
+                        || Value::known(to_field::<F>(*val)),
+                    )?;
+                    constants.insert(*val, Rc::new(cell));
+                }
+
+                for (k, v) in fixed_constants.iter() {
+                    let v2 = constants.get(k).unwrap();
+                    region.constrain_equal(v.cell(), v2.cell()).unwrap();
+                }
+
+                Ok(constants)
+            },
+        )?;
+
+        Ok(advice_constants)
     }
 }

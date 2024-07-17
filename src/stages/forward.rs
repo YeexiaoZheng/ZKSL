@@ -35,6 +35,7 @@ use super::assign::Assign;
 
 #[derive(Clone, Debug)]
 pub struct ForwardCircuit<F: PrimeField + Ord + FromUniformBytes<64>> {
+    pub k: usize,
     pub graph: Graph,
     pub used_numerics: BTreeSet<NumericType>,
     pub field_tensor_map: HashMap<String, FieldTensor<F>>,
@@ -49,7 +50,7 @@ pub struct ForwardConfig<F: PrimeField + Ord + FromUniformBytes<64>> {
 }
 
 impl<F: PrimeField + Ord + FromUniformBytes<64>> ForwardCircuit<F> {
-    pub fn construct(graph: Graph) -> Self {
+    pub fn construct(graph: Graph, numeric_config: &NumericConfig) -> Self {
         let mut used_numerics = BTreeSet::new();
         for node in graph.nodes.iter() {
             let op_type = match_op_type(node.op_type.clone());
@@ -72,6 +73,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> ForwardCircuit<F> {
             .collect();
 
         Self {
+            k: numeric_config.k,
             graph,
             used_numerics,
             field_tensor_map,

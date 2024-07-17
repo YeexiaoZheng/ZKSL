@@ -62,7 +62,7 @@ pub fn configure_static(numeric_config: NumericConfig) -> NumericConfig {
 pub fn configure_static_numeric_config_default() -> NumericConfig {
     let nconfig = &NUMERIC_CONFIG;
     let cloned = nconfig.lock().unwrap().clone();
-    let k = 12;
+    let k = 10;
     let new_numeric_config = NumericConfig {
         k,
         scale_factor: 100,

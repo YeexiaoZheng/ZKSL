@@ -72,7 +72,7 @@ impl<F: PrimeField> DotChip<F> {
 
     pub fn get_weight_columns(config: &DotConfig) -> Vec<Column<Advice>> {
         let num_inputs = (config.columns.len() - 1) / 2;
-        config.columns[num_inputs..config.columns.len() - 1].to_vec()
+        config.columns[num_inputs..(2 * num_inputs)].to_vec()
     }
 }
 

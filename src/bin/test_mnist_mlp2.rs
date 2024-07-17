@@ -1,4 +1,4 @@
-use halo2_proofs::{dev::MockProver, halo2curves::pasta::Fp};
+use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 
 use ndarray::Array;
 use zksl::{
@@ -6,6 +6,7 @@ use zksl::{
     graph::{Graph, GraphInput},
     loss::loss::LossType,
     numerics::numeric::NumericConfig,
+    provers::prover_kzg::KZGProver,
     stages::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit},
     utils::{
         helpers::{configure_static, to_field, update_graph},
@@ -14,12 +15,12 @@ use zksl::{
     weight::{FieldWeight, Weight},
 };
 
-type F = Fp;
+type F = Fr;
 
 fn main() {
     // Parameters
     let scale_factor = 1024;
-    let k = 20;
+    let k = 19;
     let num_cols = 12;
     let batch_size = 10;
     let lr = 100;
@@ -54,7 +55,7 @@ fn main() {
         let start = std::time::Instant::now();
 
         // Only compute the hash output once
-        let forward_circuit = ForwardCircuit::<F>::construct(graph.clone());
+        let forward_circuit = ForwardCircuit::<F>::construct(graph.clone(), &numeric_config);
         let hash_output = PoseidonHash::<F>::hash_vec_to_one(
             // Poseidon hash the forward weights
             FieldWeight::<F>::construct(
@@ -83,7 +84,7 @@ fn main() {
             .entry("input".to_string())
             .or_insert(input.clone());
         *x = input.clone();
-        let mut forward_circuit = ForwardCircuit::<F>::construct(graph.clone());
+        let mut forward_circuit = ForwardCircuit::<F>::construct(graph.clone(), &numeric_config);
         let score = forward_circuit.run().unwrap();
         println!(
             "label: \n{:?}, \nscore: \n{:?}",
@@ -99,10 +100,16 @@ fn main() {
         // Verify the circuit
         let mut forward_public = score.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
         forward_public.push(hash_output);
-        let forward_prover =
-            MockProver::run(k as u32, &forward_circuit, vec![forward_public]).unwrap();
-        assert_eq!(forward_prover.verify(), Ok(()));
-        println!("Forward circuit verified");
+        // let forward_prover =
+        //     MockProver::run(k as u32, &forward_circuit, vec![forward_public]).unwrap();
+        // assert_eq!(forward_prover.verify(), Ok(()));
+        // println!("Forward circuit verified");
+
+        // Create proof
+        let prover = KZGProver::construct(forward_circuit.clone());
+        let (pk, _vk) = prover.gen_pk_vk();
+        let proof = prover.prove(&pk, forward_public);
+        println!("sizeof(proof): {} Bytes", std::mem::size_of_val(&proof));
 
         /* Run gradient circuit */
         let label = inputs.iter().map(|x| x.label).collect::<Vec<_>>();
@@ -128,7 +135,7 @@ fn main() {
         backward_graph
             .tensor_map
             .insert("gradient".to_string(), gradient.clone());
-        let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone(), lr);
+        let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone(), &numeric_config);
         let backward_gradient = backward_circuit.run().unwrap();
         println!("backward_gradient: \n{:?}", backward_gradient);
         // println!("graph: {:#?}", backward_circuit.graph);

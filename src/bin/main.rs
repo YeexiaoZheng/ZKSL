@@ -41,7 +41,7 @@ fn main() {
 
         /* Run forward circuit */
         let _input = graph.tensor_map.get("input").unwrap().clone();
-        let mut forward_circuit = ForwardCircuit::<F>::construct(graph.clone());
+        let mut forward_circuit = ForwardCircuit::<F>::construct(graph.clone(), &numeric_config);
         let score = forward_circuit.run().unwrap();
         println!("score: {:?}", score);
         let numeric_config = configure_static(NumericConfig {
@@ -89,7 +89,7 @@ fn main() {
         backward_graph
             .tensor_map
             .insert("gradient".to_string(), gradient.clone());
-        let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone(), lr);
+        let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone(), &numeric_config);
         let backward_gradient = backward_circuit.run().unwrap();
         println!("backward_gradient: {:?}", backward_gradient);
         // println!("graph: {:#?}", backward_circuit.graph);

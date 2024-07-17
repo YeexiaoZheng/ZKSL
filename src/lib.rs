@@ -2,6 +2,7 @@ pub mod graph;
 pub mod model;
 pub mod weight;
 
+pub mod provers;
 pub mod utils;
 
 pub mod circuits;

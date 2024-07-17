@@ -129,7 +129,7 @@ pub trait Numeric<F: PrimeField> {
                         match self.compute_row(&mut region, i, &row_inputs, &constants) {
                             Ok(res) => res,
                             Err(e) => {
-                                panic!("Error in {} numeric op_row_region: {:?}", self.name(), e)
+                                panic!("Error in {} numeric compute_row: {:?}", self.name(), e)
                             }
                         };
                     // Check that the outputs' len is correct.

@@ -7,6 +7,7 @@ mod tests {
     use crate::{
         graph::Graph,
         numerics::numeric::NumericConfig,
+        provers::prover_kzg::KZGProver,
         stages::forward::ForwardCircuit,
         utils::{
             helpers::{configure_static, configure_static_numeric_config_default, to_field},
@@ -29,7 +30,7 @@ mod tests {
             load_from_json("src/utils/test.json"),
             numeric_config.scale_factor,
         );
-        let mut circuit = ForwardCircuit::<F>::construct(graph.clone());
+        let mut circuit = ForwardCircuit::<F>::construct(graph.clone(), &numeric_config);
 
         // Set numeric config
         configure_static(NumericConfig {
@@ -49,9 +50,15 @@ mod tests {
                 *o as f64 / numeric_config.scale_factor as f64
             );
         }
-
-        // Verify the circuit
         let public = score.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
+
+        // Create proof
+        let prover = KZGProver::construct(circuit.clone());
+        let (pk, _vk) = prover.gen_pk_vk();
+        let proof = prover.prove(&pk, public.clone());
+        println!("sizeof(proof): {}", std::mem::size_of_val(&proof));
+
+        // Mock prove
         let prover = MockProver::run(numeric_config.k as u32, &circuit, vec![public]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
     }

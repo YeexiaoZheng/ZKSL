@@ -21,8 +21,6 @@ mod tests {
     // backward test need to use forward and gradient
     #[test]
     fn test_backward() {
-        let lr = 1;
-
         // Config default numeric config
         let numeric_config = configure_static(NumericConfig {
             commitment: true,
@@ -36,7 +34,7 @@ mod tests {
         );
 
         /* ------------ stage 1 forward ------------ */
-        let mut forward_circuit = ForwardCircuit::<F>::construct(graph.clone());
+        let mut forward_circuit = ForwardCircuit::<F>::construct(graph.clone(), &numeric_config);
 
         // Set numeric config
         let numeric_config = configure_static(NumericConfig {
@@ -107,7 +105,7 @@ mod tests {
         backward_graph
             .tensor_map
             .insert("gradient".to_string(), gradient.clone());
-        let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone(), lr);
+        let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone(), &numeric_config);
 
         // Set numeric config
         let numeric_config = configure_static(NumericConfig {
