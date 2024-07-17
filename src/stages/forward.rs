@@ -273,7 +273,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
         // Hash the weights
         let mut hash_output = vec![];
         if config.hasher.is_some() {
-            println!("hashing the weights...");
+            println!("Hashing the weights...");
             let hasher = config.hasher.as_ref().unwrap();
             let weight = AssignedWeight::<F>::construct(
                 self.graph.nodes.clone(),

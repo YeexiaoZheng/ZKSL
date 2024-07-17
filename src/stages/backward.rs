@@ -232,6 +232,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<
         // Run the circuit by each operation chips
         let mut res = assigned_tensor_map.get("gradient").unwrap().clone();
         for op in self.graph.nodes.iter().rev() {
+            print!("op: {:?}\t\t", op.op_type);
             // Get inputs
             let inputs = op
                 .backward_inputs
@@ -314,6 +315,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<
                     .unwrap();
                 }
             }
+            println!("backward circuit compute successfully!");
         }
 
         // Constrain the output
@@ -326,6 +328,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<
         let mut hash_output = vec![];
         // Hash the original weights
         if config.hasher.is_some() {
+            println!("Hashing the orignial weights...");
             let hasher = config.hasher.as_ref().unwrap();
             let weight = AssignedWeight::<F>::construct(
                 self.graph.nodes.clone(),
@@ -340,6 +343,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<
 
         // Hash the changed weights
         if config.hasher.is_some() {
+            println!("Hashing the new weights...");
             let hasher = config.hasher.as_ref().unwrap();
             let weight = AssignedWeight::<F>::construct(
                 self.graph.nodes.clone(),
