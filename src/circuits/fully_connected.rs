@@ -224,18 +224,19 @@ impl<F: PrimeField> Circuit<F> for FullyConnectedCircuit<F> {
 #[test]
 fn test_fully_connected() {
     use crate::utils::helpers::to_field;
+    use crate::utils::math::Int;
     use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 
     type F = Fr;
 
     // original vector
-    let v_input: Vec<i64> = vec![1; 10];
-    let v_hidden_layer: Vec<i64> = vec![1; 100];
+    let v_input: Vec<Int> = vec![1; 10];
+    let v_hidden_layer: Vec<Int> = vec![1; 100];
 
     // original matrix
-    let o_input = Array::<i64, ndarray::Dim<_>>::from_shape_vec([1, 10], v_input.clone()).unwrap();
+    let o_input = Array::<Int, ndarray::Dim<_>>::from_shape_vec([1, 10], v_input.clone()).unwrap();
     let o_hidden_layer =
-        Array::<i64, ndarray::Dim<_>>::from_shape_vec([10, 10], v_hidden_layer.clone()).unwrap();
+        Array::<Int, ndarray::Dim<_>>::from_shape_vec([10, 10], v_hidden_layer.clone()).unwrap();
     let o_output = o_input.dot(&o_hidden_layer);
     println!("{:?}", o_input);
     println!("{:?}", o_hidden_layer);

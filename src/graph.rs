@@ -74,6 +74,7 @@ impl Graph {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct GraphInput {
     pub data: Tensor,
     pub label: Int,

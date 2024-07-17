@@ -1,4 +1,4 @@
-pub type Int = i64;
+pub type Int = i128;
 pub type Float = f64;
 
 pub fn exp(x: Int, sf: u64) -> Int {

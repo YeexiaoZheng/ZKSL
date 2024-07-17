@@ -217,7 +217,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
 
         // Run the circuit by each operation chips
         for op in self.graph.nodes.iter() {
-            print!("op: {:?}\t\t", op.op_type);
+            print!("op: {:?}\t", op.op_type);
             // Get inputs
             let inputs = op
                 .inputs

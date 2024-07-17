@@ -232,7 +232,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<
         // Run the circuit by each operation chips
         let mut res = assigned_tensor_map.get("gradient").unwrap().clone();
         for op in self.graph.nodes.iter().rev() {
-            print!("op: {:?}\t\t", op.op_type);
+            print!("op: {:?}\t", op.op_type);
             // Get inputs
             let inputs = op
                 .backward_inputs

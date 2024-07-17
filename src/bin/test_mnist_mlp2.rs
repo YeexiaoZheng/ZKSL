@@ -1,6 +1,6 @@
 use halo2_proofs::{dev::MockProver, halo2curves::pasta::Fp};
 
-use ndarray::{Array, IxDyn};
+use ndarray::Array;
 use zksl::{
     commitments::poseidon::PoseidonHash,
     graph::{Graph, GraphInput},
@@ -28,11 +28,12 @@ fn main() {
         k,
         num_cols,
         num_rows: 1 << k - 10 + 1,
-        max_val: 1 << 16 - 1,
-        min_val: -(1 << 16),
+        max_val: 1 << 17 - 1,
+        min_val: -(1 << 17),
         scale_factor,
         batch_size,
         learning_rate: lr,
+        commitment: true,
         ..Default::default()
     });
 
@@ -63,45 +64,52 @@ fn main() {
             .to_vec(),
         );
 
-        let mut scores = vec![];
-        for input in inputs.iter() {
-            /* Run forward circuit */
-            // let _input = graph.tensor_map.get("input").unwrap().clone();
-            let x = graph
-                .tensor_map
-                .entry("input".to_string())
-                .or_insert(input.data.clone());
-            *x = input.data.clone();
-            let mut forward_circuit = ForwardCircuit::<F>::construct(graph.clone());
-            let score = forward_circuit.run().unwrap();
-            scores.push(score.clone());
-            println!("label: {}, score: {:?}", input.label, score);
-            let _ = configure_static(NumericConfig {
-                // Set numeric config
-                used_numerics: forward_circuit.clone().used_numerics.clone().into(),
-                ..numeric_config.clone()
-            });
+        let input = Array::from_shape_vec(
+            (inputs.len(), inputs[0].data.len()),
+            inputs
+                .clone()
+                .into_iter()
+                .map(|inp| inp.data.into_iter())
+                .flatten()
+                .collect(),
+        )
+        .unwrap()
+        .into_dyn();
 
-            // Verify the circuit
-            let mut forward_public = score.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
-            forward_public.push(hash_output);
-            let forward_prover =
-                MockProver::run(k as u32, &forward_circuit, vec![forward_public]).unwrap();
-            assert_eq!(forward_prover.verify(), Ok(()));
-            println!("Forward circuit verified");
-        }
+        /* Run forward circuit */
+        // let _input = graph.tensor_map.get("input").unwrap().clone();
+        let x = graph
+            .tensor_map
+            .entry("input".to_string())
+            .or_insert(input.clone());
+        *x = input.clone();
+        let mut forward_circuit = ForwardCircuit::<F>::construct(graph.clone());
+        let score = forward_circuit.run().unwrap();
+        println!(
+            "label: \n{:?}, \nscore: \n{:?}",
+            inputs.iter().map(|inp| inp.label).collect::<Vec<_>>(),
+            score
+        );
+        let _ = configure_static(NumericConfig {
+            // Set numeric config
+            used_numerics: forward_circuit.clone().used_numerics.clone().into(),
+            ..numeric_config.clone()
+        });
+
+        // Verify the circuit
+        let mut forward_public = score.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
+        forward_public.push(hash_output);
+        let forward_prover =
+            MockProver::run(k as u32, &forward_circuit, vec![forward_public]).unwrap();
+        assert_eq!(forward_prover.verify(), Ok(()));
+        println!("Forward circuit verified");
 
         /* Run gradient circuit */
         let label = inputs.iter().map(|x| x.label).collect::<Vec<_>>();
-        let score = Array::from_shape_vec(
-            IxDyn(&[batch_size, scores[0].len()]),
-            scores.iter().flatten().cloned().collect(),
-        )
-        .unwrap();
         let gradient_circuit =
             GradientCircuit::<F>::construct(score.clone(), label.clone(), LossType::SoftMax);
         let (loss, gradient) = gradient_circuit.run().unwrap();
-        println!("loss: {:?}, gradient: {:?}", loss, gradient);
+        println!("loss: \n{:?}, \ngradient: \n{:?}", loss, gradient);
         let numeric_config = configure_static(NumericConfig {
             // Set numeric config
             batch_size,
@@ -116,13 +124,13 @@ fn main() {
         println!("Gradient circuit verified");
 
         /* Run backward circuit */
-        let mut backward_graph = graph.clone();
+        let mut backward_graph = forward_circuit.graph.clone();
         backward_graph
             .tensor_map
             .insert("gradient".to_string(), gradient.clone());
         let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone(), lr);
         let backward_gradient = backward_circuit.run().unwrap();
-        println!("backward_gradient: {:?}", backward_gradient);
+        println!("backward_gradient: \n{:?}", backward_gradient);
         // println!("graph: {:#?}", backward_circuit.graph);
 
         let _ = configure_static(NumericConfig {

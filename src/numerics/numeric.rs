@@ -75,7 +75,6 @@ pub struct NumericConfig {
     pub commitment: bool,
 
     // learning params
-    pub use_batch: bool,
     pub batch_size: usize,
     pub learning_rate: Int,
 }
