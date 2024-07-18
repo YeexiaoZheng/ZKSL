@@ -328,7 +328,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<
         let mut hash_output = vec![];
         // Hash the original weights
         if config.hasher.is_some() {
-            println!("Hashing the orignial weights...");
+            print!("Hashing the orignial weights...");
             let hasher = config.hasher.as_ref().unwrap();
             let weight = AssignedWeight::<F>::construct(
                 self.graph.nodes.clone(),
@@ -339,6 +339,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for BackwardCircuit<
                 weight.to_vec(),
                 constants[&0].clone(),
             )?);
+            println!("successfully!");
         }
 
         // Hash the changed weights

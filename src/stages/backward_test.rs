@@ -105,7 +105,8 @@ mod tests {
         backward_graph
             .tensor_map
             .insert("gradient".to_string(), gradient.clone());
-        let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone(), &numeric_config);
+        let mut backward_circuit =
+            BackwardCircuit::<F>::construct(backward_graph.clone(), &numeric_config);
 
         // Set numeric config
         let numeric_config = configure_static(NumericConfig {

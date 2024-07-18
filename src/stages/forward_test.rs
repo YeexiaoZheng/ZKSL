@@ -7,7 +7,7 @@ mod tests {
     use crate::{
         graph::Graph,
         numerics::numeric::NumericConfig,
-        provers::prover_kzg::KZGProver,
+        provers::prover_kzg::{KZGProver, StageType},
         stages::forward::ForwardCircuit,
         utils::{
             helpers::{configure_static, configure_static_numeric_config_default, to_field},
@@ -53,9 +53,10 @@ mod tests {
         let public = score.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
 
         // Create proof
-        let prover = KZGProver::construct(circuit.clone());
-        let (pk, _vk) = prover.gen_pk_vk();
-        let proof = prover.prove(&pk, public.clone());
+        let mut prover = KZGProver::construct(circuit.k);
+        prover.set_forward(circuit.clone());
+        let (pk, _vk) = prover.keygen_forward();
+        let proof = prover.prove(StageType::Forward, &pk, public.clone());
         println!("sizeof(proof): {}", std::mem::size_of_val(&proof));
 
         // Mock prove

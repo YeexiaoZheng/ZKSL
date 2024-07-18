@@ -89,7 +89,8 @@ fn main() {
         backward_graph
             .tensor_map
             .insert("gradient".to_string(), gradient.clone());
-        let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone(), &numeric_config);
+        let mut backward_circuit =
+            BackwardCircuit::<F>::construct(backward_graph.clone(), &numeric_config);
         let backward_gradient = backward_circuit.run().unwrap();
         println!("backward_gradient: {:?}", backward_gradient);
         // println!("graph: {:#?}", backward_circuit.graph);

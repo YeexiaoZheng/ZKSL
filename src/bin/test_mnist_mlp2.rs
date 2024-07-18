@@ -1,4 +1,7 @@
-use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+use halo2_proofs::{
+    halo2curves::bn256::{Fr, G1Affine},
+    plonk::{ProvingKey, VerifyingKey},
+};
 
 use ndarray::Array;
 use zksl::{
@@ -6,10 +9,10 @@ use zksl::{
     graph::{Graph, GraphInput},
     loss::loss::LossType,
     numerics::numeric::NumericConfig,
-    provers::prover_kzg::KZGProver,
+    provers::prover_kzg::{KZGProver, StageType},
     stages::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit},
     utils::{
-        helpers::{configure_static, to_field, update_graph},
+        helpers::{configure_static, to_field, update_graph, Tensor},
         loader::{load_from_json, load_input_from_json},
     },
     weight::{FieldWeight, Weight},
@@ -20,11 +23,11 @@ type F = Fr;
 fn main() {
     // Parameters
     let scale_factor = 1024;
-    let k = 19;
+    let k = 20;
     let num_cols = 12;
     let batch_size = 10;
     let lr = 100;
-    let epoch = 20;
+    let epoch = 10;
     let numeric_config = configure_static(NumericConfig {
         k,
         num_cols,
@@ -49,6 +52,14 @@ fn main() {
         scale_factor,
     );
     // println!("{:#?}", graph);
+
+    let mut prover = KZGProver::construct(k);
+    let mut fpk: Option<ProvingKey<G1Affine>> = Default::default();
+    let mut fvk: Option<VerifyingKey<G1Affine>> = Default::default();
+    let mut gpk: Option<ProvingKey<G1Affine>> = Default::default();
+    let mut gvk: Option<VerifyingKey<G1Affine>> = Default::default();
+    let mut bpk: Option<ProvingKey<G1Affine>> = Default::default();
+    let mut bvk: Option<VerifyingKey<G1Affine>> = Default::default();
 
     for e in 0..epoch {
         println!("----- epoch: {:?} -----", e);
@@ -96,20 +107,30 @@ fn main() {
             used_numerics: forward_circuit.clone().used_numerics.clone().into(),
             ..numeric_config.clone()
         });
-
-        // Verify the circuit
+        // Set public
         let mut forward_public = score.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
         forward_public.push(hash_output);
-        // let forward_prover =
-        //     MockProver::run(k as u32, &forward_circuit, vec![forward_public]).unwrap();
-        // assert_eq!(forward_prover.verify(), Ok(()));
-        // println!("Forward circuit verified");
-
+        // keygen_forward
+        if prover.stage.forward.is_none() {
+            prover.set_forward(forward_circuit.clone());
+            let (pk, vk) = prover.keygen_forward();
+            (fpk, fvk) = (Some(pk).into(), Some(vk).into());
+        }
         // Create proof
-        let prover = KZGProver::construct(forward_circuit.clone());
-        let (pk, _vk) = prover.gen_pk_vk();
-        let proof = prover.prove(&pk, forward_public);
+        let proof = prover.prove(
+            StageType::Forward,
+            &fpk.clone().unwrap(),
+            forward_public.clone(),
+        );
         println!("sizeof(proof): {} Bytes", std::mem::size_of_val(&proof));
+        // Verify the proof
+        assert!(prover.verify(
+            StageType::Forward,
+            &fvk.clone().unwrap(),
+            forward_public,
+            proof
+        ));
+        println!("Forward circuit verified");
 
         /* Run gradient circuit */
         let label = inputs.iter().map(|x| x.label).collect::<Vec<_>>();
@@ -123,19 +144,37 @@ fn main() {
             used_numerics: gradient_circuit.clone().used_numerics.clone().into(),
             ..numeric_config.clone()
         });
-        // Verify the circuit
-        let gradient_public = gradient.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
-        let gradient_prover =
-            MockProver::run(k as u32, &gradient_circuit, vec![gradient_public]).unwrap();
-        assert_eq!(gradient_prover.verify(), Ok(()));
-        println!("Gradient circuit verified");
+        // Set public
+        let gradient_public = gradient.iter().map(|x| to_field::<F>(*x)).collect::<Vec<_>>();
+        // keygen_gradient
+        // if prover.stage.gradient.is_none() {
+        //     prover.set_gradient(gradient_circuit.clone());
+        //     let (pk, vk) = prover.keygen_gradient();
+        //     (gpk, gvk) = (Some(pk).into(), Some(vk).into());
+        // }
+        // // Create proof
+        // let proof = prover.prove(
+        //     StageType::Gradient,
+        //     &gpk.clone().unwrap(),
+        //     gradient_public.clone(),
+        // );
+        // println!("sizeof(proof): {} Bytes", std::mem::size_of_val(&proof));
+        // // Verify the proof
+        // assert!(prover.verify(
+        //     StageType::Gradient,
+        //     &gvk.clone().unwrap(),
+        //     gradient_public,
+        //     proof
+        // ));
+        // println!("Gradient circuit verified");
 
         /* Run backward circuit */
         let mut backward_graph = forward_circuit.graph.clone();
         backward_graph
             .tensor_map
             .insert("gradient".to_string(), gradient.clone());
-        let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone(), &numeric_config);
+        let mut backward_circuit =
+            BackwardCircuit::<F>::construct(backward_graph.clone(), &numeric_config);
         let backward_gradient = backward_circuit.run().unwrap();
         println!("backward_gradient: \n{:?}", backward_gradient);
         // println!("graph: {:#?}", backward_circuit.graph);
@@ -168,9 +207,26 @@ fn main() {
             .collect::<Vec<_>>();
         backward_public.push(forward_hash_output);
         backward_public.push(backward_hash_output);
-        let backward_prover =
-            MockProver::run(k as u32, &backward_circuit, vec![backward_public]).unwrap();
-        assert_eq!(backward_prover.verify(), Ok(()));
+        // keygen_backward
+        if prover.stage.backward.is_none() {
+            prover.set_backward(backward_circuit.clone());
+            let (pk, vk) = prover.keygen_backward();
+            (bpk, bvk) = (Some(pk).into(), Some(vk).into());
+        }
+        // Create proof
+        let proof = prover.prove(
+            StageType::Backward,
+            &bpk.clone().unwrap(),
+            backward_public.clone(),
+        );
+        println!("sizeof(proof): {} Bytes", std::mem::size_of_val(&proof));
+        // Verify the proof
+        assert!(prover.verify(
+            StageType::Backward,
+            &bvk.clone().unwrap(),
+            backward_public,
+            proof
+        ));
         println!("Backward circuit verified");
 
         // Update graph (mainly the weights)

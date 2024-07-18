@@ -214,6 +214,7 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
 impl<F: PrimeField> NumericConsumer for SoftMaxLossChip<F> {
     fn used_numerics(&self) -> Vec<NumericType> {
         vec![
+            NumericType::RowLookUp,
             NumericType::Exp,
             NumericType::Max,
             NumericType::Sub,

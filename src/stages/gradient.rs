@@ -5,7 +5,7 @@ use crate::{
         loss::{Loss, LossType},
         softmax::SoftMaxLossChip,
     },
-    numerics::numeric::{NumericConfig, NumericType},
+    numerics::numeric::{NumericConfig, NumericConsumer, NumericType},
     utils::{
         helpers::{to_field, FieldTensor, Tensor, NUMERIC_CONFIG},
         matcher::{match_configure, match_load_lookups},
@@ -41,20 +41,14 @@ pub struct GradientConfig<F: PrimeField> {
 
 impl<F: PrimeField> GradientCircuit<F> {
     pub fn construct(score: Tensor, label: Vec<Int>, loss: LossType) -> Self {
-        let mut used_numerics = BTreeSet::new();
-        match loss {
+        let used_numerics = BTreeSet::from_iter(match loss {
             LossType::SoftMax => {
-                used_numerics.insert(NumericType::Exp);
-                used_numerics.insert(NumericType::Sub);
-                used_numerics.insert(NumericType::Mul);
-                used_numerics.insert(NumericType::Div);
-                used_numerics.insert(NumericType::Accumulator);
-                used_numerics.insert(NumericType::Max);
-                used_numerics.insert(NumericType::RowLookUp);
-                used_numerics.insert(NumericType::FieldLookUp);
+                Box::new(SoftMaxLossChip::<F>::construct(Default::default()))
+                    as Box<dyn NumericConsumer>
             }
-            _ => (),
-        }
+            .used_numerics(),
+            _ => vec![],
+        });
         let field_score = Array::from_shape_vec(
             score.shape(),
             score.iter().map(|x| to_field::<F>(*x)).collect(),
