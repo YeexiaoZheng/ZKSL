@@ -1,5 +1,11 @@
 # ZKSL: Zero-Knowledge Split Learning
 
+## TODO
+- [ ] Plonky2 FRI for polynomial commitment
+- [ ] Poseidon hash function
+- [ ] Sha256 hash function
+- [ ] Lassio for zkSNARK
+
 ## Overview
 
 ZKSL (Zero-Knowledge Split Learning) is a project aimed at leveraging zero-knowledge proofs to verify the integrity and correctness of the split learning process in machine learning. With the increasing prevalence of on-device machine learning and collaborative model training between edge devices and servers, there is a growing need for methods that can both enhance privacy and ensure the validity of the training process. ZKSL addresses these needs by providing a zero-knowledge proof-based solution to validate the entire machine learning process.
