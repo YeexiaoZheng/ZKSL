@@ -4,7 +4,8 @@
 - [ ] Plonky2 FRI for polynomial commitment
 - [ ] Poseidon hash function
 - [ ] Sha256 hash function
-- [ ] Lassio for zkSNARK
+- [ ] Lassio for Plonk
+- [ ] Folding for Plonk
 
 ## Overview
 
