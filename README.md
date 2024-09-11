@@ -2,6 +2,7 @@
 
 ## TODO
 - [ ] Plonky2 FRI for polynomial commitment
+- [ ] HyperPlonk
 - [ ] Poseidon hash function
 - [ ] Sha256 hash function
 - [ ] Lassio for Plonk
@@ -56,7 +57,7 @@ The ZKSL project is structured into three main stages, each representing a criti
 
 - [x] GEMM
 - [ ] Conv
-- [ ] Concat
+- [x] Concat
 - [x] ReLU
 - [x] Softmax
 
@@ -71,6 +72,7 @@ The ZKSL project is structured into three main stages, each representing a criti
 ### Provers
 - [x] KZG
 - [ ] IPA
+- [ ] FRI
 
 ## ONNX Model Integration
 The project uses ONNX (Open Neural Network Exchange) models as the standard input. ONNX is an open format built to represent machine learning models. It enables interoperability between different machine learning frameworks, allowing models to be trained in one framework and then transferred to another for inference. This flexibility makes ONNX an ideal choice for ZKSL.
