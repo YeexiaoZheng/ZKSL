@@ -10,7 +10,7 @@ use zksl::{
     loss::LossType,
     numeric::NumericConfig,
     prover::prover_kzg::{KZGProver, StageType},
-    stages::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit},
+    stage::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit},
     utils::{
         helpers::{configure_static, to_field, update_graph, Tensor},
         loader::{load_from_json, load_input_from_json},
