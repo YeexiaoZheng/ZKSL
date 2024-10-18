@@ -4,14 +4,10 @@ use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
 use ndarray::{Array, Axis, ShapeError};
 
 use crate::{
-    numerics::{
-        accumulator::AccumulatorChip,
-        div::DivChip,
-        max::MaxChip,
-        mul::MulChip,
-        nonlinear::exp::ExpChip,
-        numeric::{Numeric, NumericConfig, NumericConsumer, NumericType},
-        sub::SubChip,
+    numeric::{
+        accumulator::AccumulatorChip, div::DivChip, max::MaxChip, mul::MulChip,
+        nonlinear::exp::ExpChip, sub::SubChip, Numeric, NumericConfig, NumericConsumer,
+        NumericType,
     },
     utils::{
         helpers::{to_primitive, AssignedTensor, AssignedTensorRef, CellRc, Tensor},
@@ -19,7 +15,7 @@ use crate::{
     },
 };
 
-use super::loss::Loss;
+use super::Loss;
 
 pub struct SoftMaxLossChip<F: PrimeField> {
     pub numeric_config: Rc<NumericConfig>,

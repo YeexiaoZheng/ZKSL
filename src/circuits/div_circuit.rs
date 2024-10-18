@@ -7,9 +7,9 @@ use halo2_proofs::{
 };
 
 use crate::{
-    numerics::{
+    numeric::{
         div::DivChip,
-        numeric::{Numeric, NumericConfig},
+        {Numeric, NumericConfig},
     },
     utils::{
         helpers::{to_field, CellRc, NUMERIC_CONFIG},

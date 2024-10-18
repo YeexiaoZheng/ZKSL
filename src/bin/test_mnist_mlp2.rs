@@ -7,9 +7,9 @@ use ndarray::Array;
 use zksl::{
     commitments::poseidon::PoseidonHash,
     graph::{Graph, GraphInput},
-    loss::loss::LossType,
-    numerics::numeric::NumericConfig,
-    provers::prover_kzg::{KZGProver, StageType},
+    loss::LossType,
+    numeric::NumericConfig,
+    prover::prover_kzg::{KZGProver, StageType},
     stages::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit},
     utils::{
         helpers::{configure_static, to_field, update_graph, Tensor},
@@ -145,7 +145,10 @@ fn main() {
             ..numeric_config.clone()
         });
         // Set public
-        let gradient_public = gradient.iter().map(|x| to_field::<F>(*x)).collect::<Vec<_>>();
+        let gradient_public = gradient
+            .iter()
+            .map(|x| to_field::<F>(*x))
+            .collect::<Vec<_>>();
         // keygen_gradient
         // if prover.stage.gradient.is_none() {
         //     prover.set_gradient(gradient_circuit.clone());

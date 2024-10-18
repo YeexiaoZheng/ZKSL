@@ -7,10 +7,10 @@ use halo2_proofs::{
 };
 
 use crate::{
-    numerics::{
+    numeric::{
         lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip},
         nonlinear::{exp::ExpChip, relu::ReluChip},
-        numeric::{Numeric, NumericConfig, NumericType},
+        {Numeric, NumericConfig, NumericType},
     },
     utils::{
         helpers::{to_field, CellRc, NUMERIC_CONFIG},

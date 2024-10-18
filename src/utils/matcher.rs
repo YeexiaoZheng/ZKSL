@@ -8,7 +8,7 @@ use halo2_proofs::{
 use ndarray::ShapeError;
 
 use crate::{
-    numerics::{
+    numeric::{
         accumulator::AccumulatorChip,
         add::AddChip,
         div::DivChip,
@@ -16,13 +16,11 @@ use crate::{
         lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip},
         max::MaxChip,
         mul::MulChip,
-        nonlinear::{exp::ExpChip, ln::LnChip, nonlinear::NonLinearNumeric, relu::ReluChip},
-        numeric::{NumericConfig, NumericConsumer, NumericType},
+        nonlinear::{exp::ExpChip, ln::LnChip, relu::ReluChip, NonLinearNumeric},
         sub::SubChip,
+        NumericConfig, NumericConsumer, NumericType,
     },
-    operations::{
-        gemm::GemmChip, none::NoneChip, operation::OPType, relu::ReLUChip, softmax::SoftMaxChip,
-    },
+    operation::{gemm::GemmChip, none::NoneChip, relu::ReLUChip, softmax::SoftMaxChip, OPType},
 };
 
 use super::helpers::Tensor;

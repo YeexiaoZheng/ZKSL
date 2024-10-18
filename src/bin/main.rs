@@ -3,9 +3,9 @@ use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 use zksl::{
     commitments::poseidon::PoseidonHash,
     graph::Graph,
-    loss::loss::LossType,
-    numerics::numeric::NumericConfig,
-    stages::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit},
+    loss::LossType,
+    numeric::NumericConfig,
+    stage::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit},
     utils::{
         helpers::{configure_static, to_field, update_graph},
         loader::load_from_json,

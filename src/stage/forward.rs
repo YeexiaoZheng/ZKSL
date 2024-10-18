@@ -4,13 +4,6 @@ use std::{
     rc::Rc,
 };
 
-use halo2_proofs::{
-    circuit::{Layouter, SimpleFloorPlanner, Value},
-    halo2curves::ff::{FromUniformBytes, PrimeField},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
-};
-use ndarray::{Array, IxDyn, ShapeError};
-
 use crate::{
     commitments::poseidon::FixedPoseidonChip,
     graph::Graph,
@@ -19,32 +12,41 @@ use crate::{
         gemm::GemmChip, none::NoneChip, relu::ReLUChip, softmax::SoftMaxChip, OPType, Operation,
     },
     utils::{
-        helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
+        helpers::{to_field, FieldTensor, Tensor, NUMERIC_CONFIG},
         matcher::{
             match_configure, match_consumer, match_forward, match_load_lookups, match_op_type,
         },
-        math::Int,
     },
     weight::AssignedWeight,
 };
 
+use halo2_proofs::{
+    circuit::{Layouter, SimpleFloorPlanner},
+    halo2curves::ff::{FromUniformBytes, PrimeField},
+    plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
+};
+use ndarray::{Array, ShapeError};
+
+use super::assign::Assign;
+
 #[derive(Clone, Debug)]
-pub struct ModelCircuit<F: PrimeField> {
+pub struct ForwardCircuit<F: PrimeField + Ord + FromUniformBytes<64>> {
+    pub k: usize,
     pub graph: Graph,
     pub used_numerics: BTreeSet<NumericType>,
     pub field_tensor_map: HashMap<String, FieldTensor<F>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct ModelConfig<F: PrimeField + Ord + FromUniformBytes<64>> {
+pub struct ForwardConfig<F: PrimeField + Ord + FromUniformBytes<64>> {
     pub numeric_config: Rc<NumericConfig>,
     pub public: Column<Instance>,
     pub hasher: Option<FixedPoseidonChip<F>>,
     pub _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField> ModelCircuit<F> {
-    pub fn construct(graph: Graph) -> Self {
+impl<F: PrimeField + Ord + FromUniformBytes<64>> ForwardCircuit<F> {
+    pub fn construct(graph: Graph, numeric_config: &NumericConfig) -> Self {
         let mut used_numerics = BTreeSet::new();
         for node in graph.nodes.iter() {
             let op_type = match_op_type(node.op_type.clone());
@@ -67,88 +69,27 @@ impl<F: PrimeField> ModelCircuit<F> {
             .collect();
 
         Self {
+            k: numeric_config.k,
             graph,
             used_numerics,
             field_tensor_map,
         }
     }
 
-    pub fn assign_tensor_map(
-        &self,
-        mut layouter: impl Layouter<F>,
-        columns: &Vec<Column<Advice>>,
-        tensors_map: &HashMap<String, FieldTensor<F>>,
-    ) -> Result<HashMap<String, AssignedTensor<F>>, Error> {
-        Ok(layouter.assign_region(
-            || "assign_tensor_map",
-            |mut region| {
-                let mut cell_idx = 0;
-                let assigned_tensors = tensors_map
-                    .iter()
-                    .map(|(key, tensor)| {
-                        let assigned_tensor = tensor
-                            .iter()
-                            .map(|cell| {
-                                let row_idx = cell_idx / columns.len();
-                                let col_idx = cell_idx % columns.len();
-                                cell_idx += 1;
-                                Ok(Rc::new(region.assign_advice(
-                                    || "assign tensor cell",
-                                    columns[col_idx],
-                                    row_idx,
-                                    || Value::known(*cell),
-                                )?))
-                            })
-                            .collect::<Result<Vec<_>, Error>>()?;
-                        Ok((
-                            key.clone(),
-                            match Array::from_shape_vec(IxDyn(tensor.shape()), assigned_tensor) {
-                                Ok(x) => x,
-                                Err(e) => panic!(
-                                    "Error occurs at ModelCircuit.assign_tensors_map: {:?}",
-                                    e
-                                ),
-                            },
-                        ))
-                    })
-                    .collect::<Result<HashMap<_, _>, Error>>()?;
-                Ok(assigned_tensors)
-            },
-        )?)
-    }
+    // pub fn load_input(&mut self, tensor: &Tensor) {
+    //     self.graph
+    //         .tensor_map
+    //         .insert("input".to_string(), tensor.clone());
+    //     let field_tensor = Array::from_shape_vec(
+    //         tensor.shape(),
+    //         tensor.iter().map(|x| to_field::<F>(x.clone())).collect(),
+    //     )
+    //     .unwrap();
+    //     self.field_tensor_map
+    //         .insert("input".to_string(), field_tensor);
+    // }
 
-    pub fn assign_constants(
-        &self,
-        mut layouter: impl Layouter<F>,
-        config: Rc<NumericConfig>,
-    ) -> Result<HashMap<Int, CellRc<F>>, Error> {
-        let sf = config.scale_factor;
-        // let min_val = config.min_val;
-        // let max_val = config.max_val;
-
-        Ok(layouter.assign_region(
-            || "constants",
-            |mut region| {
-                let mut constants: HashMap<Int, CellRc<F>> = HashMap::new();
-
-                let vals = vec![0 as Int, 1, sf as Int /*min_val, max_val*/];
-                for (i, val) in vals.iter().enumerate() {
-                    let cell = region.assign_fixed(
-                        || format!("constant_{}", i),
-                        config.constants[0],
-                        i,
-                        || Value::known(to_field::<F>(*val)),
-                    )?;
-                    constants.insert(*val, Rc::new(cell));
-                }
-
-                Ok(constants)
-            },
-        )?)
-    }
-
-    pub fn forward(&self) -> Result<Tensor, ShapeError> {
-        let mut tensor_map = self.graph.tensor_map.clone();
+    pub fn run(&mut self) -> Result<Tensor, ShapeError> {
         let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
 
         for node in self.graph.nodes.iter() {
@@ -157,22 +98,33 @@ impl<F: PrimeField> ModelCircuit<F> {
                 &node
                     .inputs
                     .iter()
-                    .map(|x| tensor_map.get(x).unwrap().clone())
+                    .map(|x| {
+                        match self.graph.tensor_map.get(x) {
+                            Some(x) => x.clone(),
+                            None => panic!(
+                                "Error occurs at ForwardCircuit.run: tensor '{}' not found",
+                                x
+                            ),
+                        }
+                        .clone()
+                    })
                     .collect::<Vec<Tensor>>(),
                 &numeric_config,
                 &node.attributes,
             )?;
-            for (op, output) in node.outputs.iter().zip(outputs.into_iter()) {
-                tensor_map.insert(op.clone(), output);
+            for (output_str, output) in node.outputs.iter().zip(outputs.into_iter()) {
+                self.graph.tensor_map.insert(output_str.clone(), output);
             }
         }
 
-        Ok(tensor_map.get("output").unwrap().clone())
+        Ok(self.graph.tensor_map.get("output").unwrap().clone())
     }
 }
 
-impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ModelCircuit<F> {
-    type Config = ModelConfig<F>;
+impl<F: PrimeField + Ord + FromUniformBytes<64>> Assign<F> for ForwardCircuit<F> {}
+
+impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F> {
+    type Config = ForwardConfig<F>;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -213,10 +165,13 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ModelCircuit<F> 
         let public = meta.instance_column();
         meta.enable_equality(public);
 
-        ModelConfig {
-            numeric_config: Rc::new(numeric_config.clone()),
+        // Create hasher
+        let hasher = FixedPoseidonChip::configure(meta, numeric_config.clone());
+
+        ForwardConfig {
+            numeric_config: Rc::new(numeric_config),
             public,
-            hasher: FixedPoseidonChip::configure(meta, numeric_config.clone()),
+            hasher,
             _marker: PhantomData,
         }
     }
@@ -252,7 +207,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ModelCircuit<F> 
             ) {
                 Ok(_) => (),
                 Err(e) => panic!(
-                    "Error occurs at ModelCircuit.synthesize load lookups: {:?}",
+                    "Error occurs at ForwardCircuit.synthesize load lookups: {:?}",
                     e
                 ),
             }
@@ -260,6 +215,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ModelCircuit<F> 
 
         // Run the circuit by each operation chips
         for op in self.graph.nodes.iter() {
+            print!("op: {:?}\t", op.op_type);
             // Get inputs
             let inputs = op
                 .inputs
@@ -300,6 +256,8 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ModelCircuit<F> 
             for (op, output) in op.outputs.iter().zip(outputs.into_iter()) {
                 assigned_tensor_map.insert(op.clone(), output);
             }
+            println!("forward circuit compute successfully!");
+            // println!("{:?}", layouter.)
         }
 
         // Constrain the output
@@ -310,30 +268,31 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ModelCircuit<F> 
                 .unwrap();
         }
 
-        // Constrain the weight hash
-        let mut hash_outputs = vec![];
+        // Hash the weights
+        let mut hash_output = vec![];
         if config.hasher.is_some() {
-            let hasher = config.hasher.unwrap();
+            print!("Hashing the weights...");
+            let hasher = config.hasher.as_ref().unwrap();
             let weight = AssignedWeight::<F>::construct(
                 self.graph.nodes.clone(),
                 assigned_tensor_map.clone(),
             );
-            hash_outputs = hasher
-                .hash_vec(
-                    layouter.namespace(|| "poseidon hasher"),
-                    weight.to_vec(),
-                    constants[&0].clone(),
-                )
-                .unwrap();
+            hash_output.push(hasher.hash_vec_to_one(
+                layouter.namespace(|| "hash_vec"),
+                weight.to_vec(),
+                constants[&0].clone(),
+            )?);
+            println!("successfully!");
         }
-        // println!("hash_outputs len: {:#?}", hash_outputs.len());
-        // println!("hash_outputs: {:?}", hash_outputs);
 
+        // Constrain the hash output
         let offset = output.len();
-        for (i, cell) in hash_outputs.iter().enumerate() {
-            layouter
-                .constrain_instance(cell.cell(), config.public, i + offset)
-                .unwrap();
+        if config.hasher.is_some() {
+            for (i, cell) in hash_output.iter().enumerate() {
+                layouter
+                    .constrain_instance(cell.cell(), config.public, i + offset)
+                    .unwrap();
+            }
         }
         Ok(())
     }

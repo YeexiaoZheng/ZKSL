@@ -11,7 +11,7 @@ use halo2_proofs::{
     plonk::{Advice, Column, ConstraintSystem, Error},
 };
 
-use crate::{numerics::numeric::NumericConfig, utils::helpers::to_field};
+use crate::{numeric::NumericConfig, utils::helpers::to_field};
 
 pub const WIDTH: usize = 6;
 pub const RATE: usize = 5;

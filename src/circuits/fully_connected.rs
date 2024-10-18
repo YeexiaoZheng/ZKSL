@@ -8,10 +8,10 @@ use halo2_proofs::{
 use ndarray::{s, Array, IxDyn};
 
 use crate::{
-    numerics::{
+    numeric::{
         accumulator::AccumulatorChip,
         dot::DotChip,
-        numeric::{Numeric, NumericConfig},
+        {Numeric, NumericConfig},
     },
     utils::helpers::{AssignedTensor, CellRc, FieldTensor, NUMERIC_CONFIG},
 };

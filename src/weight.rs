@@ -4,7 +4,7 @@ use halo2_proofs::halo2curves::ff::PrimeField;
 
 use crate::{
     graph::Node,
-    operations::operation::OPType,
+    operation::OPType,
     utils::{
         helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor},
         matcher::match_op_type,

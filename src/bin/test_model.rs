@@ -5,7 +5,7 @@ use zksl::{
     commitments::poseidon::PoseidonHash,
     graph::Graph,
     model::ModelCircuit,
-    numerics::numeric::NumericConfig,
+    numeric::NumericConfig,
     utils::{
         helpers::{configure_static, configure_static_numeric_config_default, to_field},
         loader::load_from_json,

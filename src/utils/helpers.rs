@@ -12,7 +12,7 @@ use num_traits::ToPrimitive;
 
 use crate::{
     graph::Graph,
-    numerics::numeric::{NumericConfig, NumericType},
+    numeric::{NumericConfig, NumericType},
 };
 
 use super::math::Int;

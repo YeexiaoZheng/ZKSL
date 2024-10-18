@@ -8,16 +8,16 @@ use halo2_proofs::{
 use ndarray::{Array, IxDyn, ShapeError};
 
 use crate::{
-    loss::{loss::Loss, softmax::SoftMaxLossChip},
-    numerics::{
+    loss::{softmax::SoftMaxLossChip, Loss},
+    numeric::{
         accumulator::AccumulatorChip,
         div::DivChip,
         lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip},
         max::MaxChip,
         mul::MulChip,
         nonlinear::{exp::ExpChip, relu::ReluChip},
-        numeric::{NumericConfig, NumericType},
         sub::SubChip,
+        {NumericConfig, NumericType},
     },
     utils::{
         helpers::{to_field, AssignedTensor, CellRc, FieldTensor, Tensor, NUMERIC_CONFIG},
