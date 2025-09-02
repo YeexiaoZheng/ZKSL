@@ -1,12 +1,12 @@
-use std::{collections::HashMap, marker::PhantomData, rc::Rc};
+use std::{collections::BTreeMap, marker::PhantomData, rc::Rc};
 
 use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
 use ndarray::{Array, ShapeError};
 
 use crate::{
     numeric::{
-        accumulator::AccumulatorChip, div::DivChip, mul::MulChip, nonlinear::exp::ExpChip, Numeric,
-        NumericConfig, NumericConsumer, NumericType,
+        div_same::DivSameLayouter, mul_same::MulSameLayouter, nonlinear::exp::ExpLookUp,
+        sum::SumLayouter, NumericConfig, NumericConsumer, NumericLayout, NumericType,
     },
     utils::{
         helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
@@ -37,7 +37,7 @@ impl<F: PrimeField> SoftMaxChip<F> {
     pub fn forward(
         inputs: &Vec<Tensor>,
         numeric_config: &NumericConfig,
-        _attributes: &HashMap<String, f64>,
+        _attributes: &BTreeMap<String, Vec<f64>>,
     ) -> Result<Vec<Tensor>, ShapeError> {
         let input = &inputs[0];
         let scale_factor = numeric_config.scale_factor;
@@ -67,7 +67,7 @@ impl<F: PrimeField> SoftMaxChip<F> {
     pub fn backward(
         inputs: &Vec<Tensor>,
         _numeric_config: &NumericConfig,
-        _attributes: &HashMap<String, f64>,
+        _attributes: &BTreeMap<String, Vec<f64>>,
     ) -> Result<Vec<Tensor>, ShapeError> {
         let input = &inputs[0];
         let gradient = input.iter().map(|x| x.clone()).collect::<Vec<_>>();
@@ -80,65 +80,91 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
         &self,
         mut layouter: impl Layouter<F>,
         inputs: &Vec<AssignedTensorRef<F>>,
-        constants: &HashMap<Int, CellRc<F>>,
-        _attributes: &HashMap<String, f64>,
+        constants: &BTreeMap<Int, CellRc<F>>,
+        _random: &Vec<CellRc<F>>,
+        _attributes: &BTreeMap<String, Vec<f64>>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         let input = inputs[0].clone();
 
-        let zero = constants.get(&0).unwrap().clone();
-        let one = constants.get(&1).unwrap().clone();
-        let sf = constants
-            .get(&(self.numeric_config.scale_factor as Int))
-            .unwrap()
-            .clone();
+        // Get constants
+        // let constants = self.get_default_constants(constants);
+        let constants = self.get_constants(
+            constants,
+            vec![0, 1, self.numeric_config.scale_factor as Int],
+        );
 
-        let exp_chip = ExpChip::<F>::construct(self.numeric_config.clone());
-        let mul_chip = MulChip::<F>::construct(self.numeric_config.clone());
-        let div_chip = DivChip::<F>::construct(self.numeric_config.clone());
-        let acc_chip = AccumulatorChip::<F>::construct(self.numeric_config.clone());
+        let exp = ExpLookUp::<F>::construct(self.numeric_config.clone());
+        let div_same = DivSameLayouter::<F>::construct(self.numeric_config.clone());
+        let sum = SumLayouter::<F>::construct(self.numeric_config.clone());
+        let mul_same = MulSameLayouter::<F>::construct(self.numeric_config.clone());
 
-        let output = input
-            .outer_iter()
-            .map(|input| {
-                let exp_out = match exp_chip.compute(
-                    layouter.namespace(|| "Exp compute"),
-                    &vec![input.iter().map(|x| x.as_ref()).collect::<Vec<_>>()],
-                    &vec![zero.as_ref(), one.as_ref()],
-                ) {
-                    Ok(output) => output,
-                    Err(_) => panic!("Exp compute failed"),
-                };
+        let mut row_offset = 0;
 
-                let exp_sum = match acc_chip.compute(
-                    layouter.namespace(|| "Accumulator compute"),
-                    &vec![exp_out.iter().collect()],
-                    &vec![zero.as_ref()],
-                ) {
-                    Ok(output) => output,
-                    Err(_) => panic!("Accumulator compute failed"),
-                };
-                let exp_sum = &exp_sum[0];
+        let output = layouter
+            .assign_region(
+                || "softmax",
+                |mut region| {
+                    let region = &mut region;
+                    let output = input
+                        .outer_iter()
+                        .map(|input| {
+                            let customise_row_offset = row_offset;
+                            // TODO: need to be optimized
+                            // In this chip we can use exp and div layouter to reduce some constraints of copy advice
+                            // It can reduce rows from x to y per unit
+                            let exp_out = match exp.layout(
+                                region,
+                                customise_row_offset,
+                                &vec![input.iter().map(|x| x.as_ref()).collect::<Vec<_>>()],
+                                &constants,
+                            ) {
+                                Ok(output) => output,
+                                Err(_) => panic!("Exp compute failed"),
+                            };
+                            row_offset = exp_out.1;
+                            let exp_out = exp_out.0;
 
-                let exp_scaled = match mul_chip.compute(
-                    layouter.namespace(|| "Mul compute"),
-                    &vec![exp_out.iter().collect(), vec![sf.as_ref(); input.len()]],
-                    &vec![zero.as_ref()],
-                ) {
-                    Ok(output) => output,
-                    Err(_) => panic!("Mul compute failed"),
-                };
+                            let exp_sum = match sum.layout(
+                                region,
+                                row_offset,
+                                &vec![exp_out.iter().collect()],
+                                &constants,
+                            ) {
+                                Ok(output) => output,
+                                Err(_) => panic!("Sum compute failed"),
+                            };
+                            row_offset = exp_sum.1;
+                            let exp_sum = &exp_sum.0[0];
 
-                match div_chip.compute(
-                    layouter.namespace(|| "Div compute"),
-                    &vec![exp_scaled.iter().collect(), vec![&exp_sum; input.len()]],
-                    &vec![zero.as_ref(), one.as_ref()],
-                ) {
-                    Ok(output) => output,
-                    Err(_) => panic!("Div compute failed"),
-                }
-            })
-            .flatten()
-            .collect::<Vec<_>>();
+                            let mul_same_out = match mul_same.layout(
+                                region,
+                                row_offset,
+                                &vec![exp_out.iter().collect(), vec![constants[2]]],
+                                &constants,
+                            ) {
+                                Ok(output) => output,
+                                Err(_) => panic!("MulSame compute failed"),
+                            };
+                            row_offset = mul_same_out.1;
+                            let mul_same_out = mul_same_out.0;
+
+                            div_same
+                                .layout(
+                                    region,
+                                    row_offset,
+                                    &vec![mul_same_out.iter().collect(), vec![&exp_sum]],
+                                    &constants,
+                                )
+                                .unwrap()
+                                .0
+                        })
+                        .flatten()
+                        .collect::<Vec<_>>();
+
+                    Ok(output)
+                },
+            )
+            .unwrap();
 
         Ok(vec![Array::from_shape_vec(
             input.shape(),
@@ -150,8 +176,9 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
         &self,
         _layouter: impl Layouter<F>,
         inputs: &Vec<AssignedTensorRef<F>>,
-        _constants: &HashMap<Int, CellRc<F>>,
-        _attributes: &HashMap<String, f64>,
+        _constants: &BTreeMap<Int, CellRc<F>>,
+        _random: &Vec<CellRc<F>>,
+        _attributes: &BTreeMap<String, Vec<f64>>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         let input = inputs[0].clone();
         let gradient = input.iter().map(|x| x.clone()).collect::<Vec<_>>();
@@ -162,11 +189,10 @@ impl<F: PrimeField> Operation<F> for SoftMaxChip<F> {
 impl<F: PrimeField> NumericConsumer for SoftMaxChip<F> {
     fn used_numerics(&self) -> Vec<NumericType> {
         vec![
-            NumericType::RowLookUp,
             NumericType::Exp,
-            NumericType::Mul,
-            NumericType::Accumulator,
-            NumericType::Div,
+            NumericType::Sum,
+            NumericType::DivSame,
+            NumericType::MulSame,
         ]
     }
 }

@@ -1,11 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 
     use crate::{
-        commitments::poseidon::PoseidonHash,
         graph::Graph,
         loss::LossType,
         numeric::NumericConfig,
@@ -14,7 +11,6 @@ mod tests {
             helpers::{configure_static, configure_static_numeric_config_default, to_field},
             loader::load_from_json,
         },
-        weight::{FieldWeight, Weight},
     };
 
     type F = Fr;
@@ -31,14 +27,15 @@ mod tests {
         let graph = Graph::construct(
             load_from_json("src/utils/test.json"),
             numeric_config.scale_factor,
+            true,
         );
 
         /* ------------ stage 1 forward ------------ */
-        let mut forward_circuit = ForwardCircuit::<F>::construct(graph.clone(), &numeric_config);
+        let mut forward_circuit = ForwardCircuit::<F>::construct(graph.clone());
 
         // Set numeric config
         let numeric_config = configure_static(NumericConfig {
-            used_numerics: Arc::new(forward_circuit.clone().used_numerics.clone()),
+            used_numerics: forward_circuit.clone().used_numerics.clone(),
             ..numeric_config
         });
 
@@ -54,19 +51,8 @@ mod tests {
             );
         }
 
-        // Hash the weights
-        let weight_hash = PoseidonHash::<F>::hash_vec_to_one(
-            // Poseidon hash the forward weights
-            FieldWeight::<F>::construct(
-                forward_circuit.graph.nodes.clone(),
-                forward_circuit.field_tensor_map.clone(),
-            )
-            .to_vec(),
-        );
-
         // Verify the circuit
-        let mut public = score.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
-        public.push(weight_hash);
+        let public = score.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
         let prover =
             MockProver::run(numeric_config.k as u32, &forward_circuit, vec![public]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
@@ -77,7 +63,7 @@ mod tests {
 
         // Set numeric config
         let numeric_config = configure_static(NumericConfig {
-            used_numerics: Arc::new(gradient_circuit.clone().used_numerics.clone()),
+            used_numerics: gradient_circuit.clone().used_numerics.clone(),
             ..numeric_config
         });
 
@@ -105,34 +91,22 @@ mod tests {
         backward_graph
             .tensor_map
             .insert("gradient".to_string(), gradient.clone());
-        let mut backward_circuit =
-            BackwardCircuit::<F>::construct(backward_graph.clone(), &numeric_config);
+        let mut backward_circuit = BackwardCircuit::<F>::construct(backward_graph.clone());
 
         // Set numeric config
         let numeric_config = configure_static(NumericConfig {
-            used_numerics: Arc::new(backward_circuit.clone().used_numerics.clone()),
+            used_numerics: backward_circuit.clone().used_numerics.clone(),
             ..numeric_config
         });
 
         let backward_gradient = backward_circuit.run().unwrap();
         println!("backward_gradient: {:?}", backward_gradient);
 
-        // Hash the new weights
-        let new_weight_hash = PoseidonHash::<F>::hash_vec_to_one(
-            FieldWeight::<F>::construct_from_weight(Weight::construct(
-                backward_circuit.graph.nodes.clone(),
-                backward_circuit.graph.tensor_map.clone(),
-            ))
-            .to_vec(),
-        );
-
         // Verify the circuit
-        let mut backward_public = backward_gradient
+        let backward_public = backward_gradient
             .iter()
             .map(|x| to_field(*x))
             .collect::<Vec<_>>();
-        backward_public.push(weight_hash);
-        backward_public.push(new_weight_hash);
         let backward_prover = MockProver::run(
             numeric_config.k as u32,
             &backward_circuit,

@@ -258,7 +258,7 @@
                 "output"
             ],
             "attributes": {
-                "axis": 1
+                "axis": [1]
             },
             "backward_inputs": [
                 "gradient",

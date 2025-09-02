@@ -18,7 +18,7 @@ pub struct NodeJson {
     pub backward_inputs: Vec<String>,
     pub backward_outputs: Vec<String>,
     #[serde_as(as = "Map<DisplayFromStr, _>")]
-    pub attributes: Vec<(String, f64)>,
+    pub attributes: Vec<(String, Vec<f64>)>,
 }
 
 #[serde_as]
@@ -34,22 +34,26 @@ pub struct GraphJson {
 pub fn load_from_json(file_path: &str) -> GraphJson {
     let file = File::open(file_path).unwrap();
     let reader = BufReader::new(file);
-    match serde_json::from_reader(reader) {
-        Ok(graph_json) => graph_json,
-        Err(e) => {
-            eprintln!("Error: {}", e);
-            panic!("Failed to load graph from json! ")
-        }
-    }
+    serde_json::from_reader(reader).unwrap_or_else(|e| {
+        eprintln!("Error: {}", e);
+        panic!("Failed to load json! ")
+    })
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InputJson {
+    pub shape: Vec<usize>,
+    pub data: Vec<i64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Input {
-    pub data: Vec<f64>,
-    pub label: i64,
+    pub input: InputJson,
+    pub label: InputJson,
+    pub inputs: Vec<InputJson>,
 }
 
-pub fn load_input_from_json(file_path: &str) -> Vec<Input> {
+pub fn load_input_from_json(file_path: &str) -> Input {
     let file = File::open(file_path).unwrap();
     let reader = BufReader::new(file);
     match serde_json::from_reader(reader) {

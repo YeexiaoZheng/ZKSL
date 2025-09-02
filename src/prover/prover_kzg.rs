@@ -1,24 +1,26 @@
-use std::time::Instant;
+use std::{fs::File, io::Write, time::Instant};
 
 use halo2_proofs::{
     halo2curves::{
         bn256::{Bn256, Fr, G1Affine},
         ff::{FromUniformBytes, PrimeField},
     },
-    plonk::{create_proof, keygen_pk, keygen_vk, verify_proof, ProvingKey, VerifyingKey},
-    poly::kzg::{
-        commitment::{KZGCommitmentScheme, ParamsKZG},
-        multiopen::{ProverSHPLONK, VerifierSHPLONK},
-        strategy::SingleStrategy,
+    plonk::{create_wrapped_proof, keygen_pk, keygen_vk, verify_proof, ProvingKey, VerifyingKey},
+    poly::{
+        commitment::Params,
+        kzg::{
+            commitment::{KZGCommitmentScheme, ParamsKZG},
+            multiopen::{ProverSHPLONK, VerifierSHPLONK},
+            strategy::SingleStrategy,
+        },
     },
     transcript::{
         Blake2bRead, Blake2bWrite, Challenge255, TranscriptReadBuffer, TranscriptWriterBuffer,
     },
 };
+use rand::rngs::OsRng;
 
-use crate::stages::{
-    backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit,
-};
+use crate::stage::{backward::BackwardCircuit, forward::ForwardCircuit, gradient::GradientCircuit};
 
 pub enum StageType {
     Forward,
@@ -42,13 +44,12 @@ pub struct KZGProver {
 
 impl KZGProver {
     pub fn construct(k: usize) -> Self {
-        let rng = rand::thread_rng();
         println!("Constructing KZGProver");
-        let start = Instant::now();
-        let fparams = ParamsKZG::setup(k as u32, rng.clone());
-        let gparams = ParamsKZG::setup(k as u32, rng.clone());
-        let bparams = ParamsKZG::setup(k as u32, rng.clone());
-        println!("ParamsKZG::setup took {:?}", start.elapsed());
+        let fparams = Self::create_params(k);
+        // let gparams = ParamsKZG::setup(k as u32, rng.clone());
+        // let bparams = ParamsKZG::setup(k as u32, rng.clone());
+        let gparams = fparams.clone();
+        let bparams = fparams.clone();
 
         Self {
             fparams,
@@ -56,6 +57,45 @@ impl KZGProver {
             bparams,
             stage: Default::default(),
         }
+    }
+
+    pub fn construct_with_params(
+        fparams: ParamsKZG<Bn256>,
+        gparams: ParamsKZG<Bn256>,
+        bparams: ParamsKZG<Bn256>,
+    ) -> Self {
+        println!("Constructing KZGProver with params");
+        Self {
+            fparams,
+            gparams,
+            bparams,
+            stage: Default::default(),
+        }
+    }
+
+    pub fn create_params(k: usize) -> ParamsKZG<Bn256> {
+        println!("Creating ParamsKZG");
+        let start = Instant::now();
+        let rng = rand::thread_rng();
+        let params = ParamsKZG::<Bn256>::setup(k as u32, rng);
+        println!("ParamsKZG::setup took {:?}", start.elapsed());
+
+        let mut buf = Vec::new();
+        params.write(&mut buf).expect("Failed to write params");
+        let params_path = format!("./params/kzg_{}.params", k);
+        let mut file = File::create(&params_path).expect("Failed to create params file");
+        file.write_all(&buf[..])
+            .expect("Failed to write params to file");
+        params
+    }
+
+    pub fn load_params(params_path: String) -> ParamsKZG<Bn256> {
+        println!("Loading ParamsKZG");
+        let start = Instant::now();
+        let mut params_fs = File::open(&params_path).expect("couldn't load params");
+        let params = ParamsKZG::read(&mut params_fs).expect("Failed to read params");
+        println!("ParamsKZG::read took {:?}", start.elapsed());
+        params
     }
 
     pub fn set_forward(&mut self, forward: ForwardCircuit<Fr>) {
@@ -119,41 +159,50 @@ impl KZGProver {
     }
 
     pub fn prove(&self, stage: StageType, pk: &ProvingKey<G1Affine>, public: Vec<Fr>) -> Vec<u8> {
-        let rng = rand::thread_rng();
+        let mut rng = OsRng;
         let start = Instant::now();
         println!("Proving");
         let mut transcript = Blake2bWrite::<_, _, Challenge255<_>>::init(vec![]);
         match stage {
             StageType::Forward => {
-                create_proof::<KZGCommitmentScheme<_>, ProverSHPLONK<_>, _, _, _, _>(
-                    &self.fparams,
-                    &pk,
-                    &[self.stage.forward.as_ref().unwrap().clone()],
-                    &[&[&public]],
-                    rng,
-                    &mut transcript,
-                )
-                .expect("proof generation should not fail");
+                let commitments =
+                    create_wrapped_proof::<KZGCommitmentScheme<_>, ProverSHPLONK<_>, _, _, _, _>(
+                        &self.fparams,
+                        &pk,
+                        &[self.stage.forward.as_ref().unwrap().clone()],
+                        &[&[&public]],
+                        &mut rng,
+                        &mut transcript,
+                        1,
+                        vec![(0, 10), (10, 20)],
+                    )
+                    .expect("proof generation should not fail");
+
+                println!("commitments: {:?}", commitments);
             }
             StageType::Gradient => {
-                create_proof::<KZGCommitmentScheme<_>, ProverSHPLONK<_>, _, _, _, _>(
+                create_wrapped_proof::<KZGCommitmentScheme<_>, ProverSHPLONK<_>, _, _, _, _>(
                     &self.gparams,
                     &pk,
                     &[self.stage.gradient.as_ref().unwrap().clone()],
                     &[&[&public]],
-                    rng,
+                    &mut rng,
                     &mut transcript,
+                    1,
+                    vec![],
                 )
                 .expect("proof generation should not fail");
             }
             StageType::Backward => {
-                create_proof::<KZGCommitmentScheme<_>, ProverSHPLONK<_>, _, _, _, _>(
+                create_wrapped_proof::<KZGCommitmentScheme<_>, ProverSHPLONK<_>, _, _, _, _>(
                     &self.bparams,
                     &pk,
                     &[self.stage.backward.as_ref().unwrap().clone()],
                     &[&[&public]],
-                    rng,
+                    &mut rng,
                     &mut transcript,
+                    1,
+                    vec![],
                 )
                 .expect("proof generation should not fail");
             }
@@ -180,12 +229,13 @@ impl KZGProver {
         };
         let strategy = SingleStrategy::new(&params);
         let mut transcript = Blake2bRead::<_, _, Challenge255<_>>::init(&proof[..]);
-        let res = verify_proof::<KZGCommitmentScheme<_>, VerifierSHPLONK<_>, _, _, _>(
+        let res = verify_proof::<_, VerifierSHPLONK<_>, _, _, _>(
             &params,
             vk,
             strategy,
             &[&[&public]],
             &mut transcript,
+            params.n(),
         )
         .is_ok();
         println!("Verifying took {:?}", start.elapsed());

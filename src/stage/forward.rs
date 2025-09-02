@@ -1,52 +1,52 @@
-use std::{
-    collections::{BTreeSet, HashMap},
-    marker::PhantomData,
-    rc::Rc,
-};
-
+use super::assign::Assign;
 use crate::{
-    commitments::poseidon::FixedPoseidonChip,
     graph::Graph,
-    numeric::{NumericConfig, NumericType},
+    numeric::{dot_vec::DotVecLayouter, NumericConfig, NumericLayout, NumericType},
     operation::{
-        gemm::GemmChip, none::NoneChip, relu::ReLUChip, softmax::SoftMaxChip, OPType, Operation,
+        add::AddChip, concat::ConcatChip, conv::ConvChip, fm::FMChip, gather::GatherChip,
+        gemm::GemmChip, max_pool::MaxPoolChip, mean::MeanChip, none::NoneChip, relu::ReLUChip,
+        reshape::ReshapeChip, softmax::SoftMaxChip, unsqueeze::UnsqueezeChip, OPType, Operation,
     },
     utils::{
-        helpers::{to_field, FieldTensor, Tensor, NUMERIC_CONFIG},
+        helpers::{
+            configure_static, get_circuit_numeric_config, get_numeric_config, to_field,
+            FieldTensor, Tensor,
+        },
         matcher::{
             match_configure, match_consumer, match_forward, match_load_lookups, match_op_type,
         },
     },
-    weight::AssignedWeight,
 };
-
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner},
     halo2curves::ff::{FromUniformBytes, PrimeField},
     plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
+use log::{debug, info};
 use ndarray::{Array, ShapeError};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    marker::PhantomData,
+    rc::Rc,
+    usize,
+};
 
-use super::assign::Assign;
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ForwardCircuit<F: PrimeField + Ord + FromUniformBytes<64>> {
-    pub k: usize,
     pub graph: Graph,
     pub used_numerics: BTreeSet<NumericType>,
-    pub field_tensor_map: HashMap<String, FieldTensor<F>>,
+    pub field_tensor_map: BTreeMap<String, FieldTensor<F>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ForwardConfig<F: PrimeField + Ord + FromUniformBytes<64>> {
     pub numeric_config: Rc<NumericConfig>,
     pub public: Column<Instance>,
-    pub hasher: Option<FixedPoseidonChip<F>>,
     pub _marker: PhantomData<F>,
 }
 
 impl<F: PrimeField + Ord + FromUniformBytes<64>> ForwardCircuit<F> {
-    pub fn construct(graph: Graph, numeric_config: &NumericConfig) -> Self {
+    pub fn construct(graph: Graph) -> Self {
         let mut used_numerics = BTreeSet::new();
         for node in graph.nodes.iter() {
             let op_type = match_op_type(node.op_type.clone());
@@ -69,7 +69,6 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> ForwardCircuit<F> {
             .collect();
 
         Self {
-            k: numeric_config.k,
             graph,
             used_numerics,
             field_tensor_map,
@@ -90,7 +89,7 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> ForwardCircuit<F> {
     // }
 
     pub fn run(&mut self) -> Result<Tensor, ShapeError> {
-        let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
+        let numeric_config = get_numeric_config();
 
         for node in self.graph.nodes.iter() {
             let operation = match_forward::<F>(match_op_type(node.op_type.clone()));
@@ -111,13 +110,66 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> ForwardCircuit<F> {
                     .collect::<Vec<Tensor>>(),
                 &numeric_config,
                 &node.attributes,
-            )?;
+            )
+            .unwrap();
+            debug!(
+                "op: {:?} \t forward non-circuit compute successfully!",
+                node.op_type
+            );
             for (output_str, output) in node.outputs.iter().zip(outputs.into_iter()) {
                 self.graph.tensor_map.insert(output_str.clone(), output);
             }
         }
 
-        Ok(self.graph.tensor_map.get("output").unwrap().clone())
+        self.configure_numeric();
+
+        let output_str = self.graph.nodes[self.graph.nodes.len() - 1].outputs[0].clone();
+        Ok(self.graph.tensor_map.get(&output_str).unwrap().clone())
+    }
+
+    pub fn configure_numeric(&self) -> NumericConfig {
+        configure_static(NumericConfig {
+            used_numerics: self.used_numerics.clone().into(),
+            ..get_numeric_config().clone()
+        })
+    }
+
+    pub fn commitment_tuples(&self) -> Vec<(usize, usize)> {
+        let input_str = self.graph.nodes[0].inputs[0].clone();
+        let output_str = self.graph.nodes[self.graph.nodes.len() - 1].outputs[0].clone();
+
+        let input_start = 0;
+        let input = self.graph.tensor_map.get(&input_str).unwrap().len();
+
+        let params_start = input_start + input;
+        let params: usize = self
+            .field_tensor_map
+            .iter()
+            .filter(|(k, _)| k.ends_with(".weight") || k.ends_with(".bias"))
+            .map(|(_, v)| v.len())
+            .sum();
+
+        let others: usize = self
+            .field_tensor_map
+            .iter()
+            .filter(|(k, _)| {
+                !k.ends_with(".weight") && !k.ends_with(".bias") && !k.ends_with(&input_str)
+            })
+            .map(|(_, v)| v.len())
+            .sum();
+
+        let output_start = params_start + params + others;
+        let output = self.graph.tensor_map.get(&output_str).unwrap().len();
+
+        info!(
+            "input: {}, params: {}, others: {}, output: {}",
+            input, params, others, output
+        );
+        vec![
+            (input_start, input),
+            (params_start, params),
+            (output_start, output),
+        ]
     }
 }
 
@@ -128,12 +180,32 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
-        todo!()
+        Default::default()
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         // Get numeric config from global state
-        let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
+        let numeric_config = get_circuit_numeric_config(meta);
+
+        // If used_numerics has gather then add gather advice lookup
+        let (gather_lookup, gather_selector) =
+            if numeric_config.used_numerics.contains(&NumericType::Gather) {
+                let gather_lookup = vec![meta.advice_column(), meta.advice_column()];
+                for col in gather_lookup.iter() {
+                    meta.enable_equality(*col);
+                }
+                (gather_lookup, Some(meta.complex_selector()))
+            } else {
+                (vec![], None)
+            };
+
+        // Create assigned columns
+        let assigned = (0..numeric_config.assigned_num_cols)
+            .map(|_| meta.advice_column())
+            .collect::<Vec<_>>();
+        for col in assigned.iter() {
+            meta.enable_equality(*col);
+        }
 
         // Create columns & constants
         let columns = (0..numeric_config.num_cols)
@@ -143,16 +215,23 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
             meta.enable_equality(*col);
         }
         let constants = vec![meta.fixed_column()];
-        for cst in constants.iter() {
-            meta.enable_equality(*cst);
+        for col in constants.iter() {
+            meta.enable_equality(*col);
         }
 
         // Update numeric config
         let mut numeric_config = NumericConfig {
+            assigned,
             columns,
             constants,
+            gather_lookup,
+            gather_selector,
             ..numeric_config
         };
+        // Add NaturalLookUp to the used numerics
+        numeric_config
+            .used_numerics
+            .insert(NumericType::NaturalLookUp);
 
         // Configure each numerics
         let iter = <BTreeSet<NumericType> as Clone>::clone(&numeric_config.used_numerics.clone())
@@ -165,13 +244,9 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
         let public = meta.instance_column();
         meta.enable_equality(public);
 
-        // Create hasher
-        let hasher = FixedPoseidonChip::configure(meta, numeric_config.clone());
-
         ForwardConfig {
             numeric_config: Rc::new(numeric_config),
             public,
-            hasher,
             _marker: PhantomData,
         }
     }
@@ -182,13 +257,53 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
         // Assign tensors
-        let mut assigned_tensor_map = self
+        let input = self
+            .field_tensor_map
+            .clone()
+            .into_iter()
+            .filter(|(k, _)| k.ends_with("input"))
+            .collect::<BTreeMap<_, _>>();
+        let params = self
+            .field_tensor_map
+            .clone()
+            .into_iter()
+            .filter(|(k, _)| k.ends_with(".weight") || k.ends_with(".bias"))
+            .collect::<BTreeMap<_, _>>();
+        let others = self
+            .field_tensor_map
+            .clone()
+            .into_iter()
+            .filter(|(k, _)| {
+                !k.ends_with(".weight") && !k.ends_with(".bias") && !k.ends_with("input")
+            })
+            .collect::<BTreeMap<_, _>>();
+        let assigned_input = self
             .assign_tensor_map(
                 layouter.namespace(|| "assign_tensor_map"),
-                &config.numeric_config.columns,
-                &self.field_tensor_map,
+                &config.numeric_config.assigned,
+                &input,
             )
             .unwrap();
+        let assigned_params = self
+            .assign_tensor_map(
+                layouter.namespace(|| "assign_tensor_map"),
+                &config.numeric_config.assigned,
+                &params,
+            )
+            .unwrap();
+        let assigned_others = self
+            .assign_tensor_map(
+                layouter.namespace(|| "assign_tensor_map"),
+                &config.numeric_config.assigned,
+                &others,
+            )
+            .unwrap();
+
+        let mut assigned_tensor_map = assigned_input
+            .into_iter()
+            .chain(assigned_params.into_iter())
+            .chain(assigned_others.into_iter())
+            .collect::<BTreeMap<_, _>>();
 
         // Assign constants
         let constants = self
@@ -197,6 +312,69 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
                 config.numeric_config.clone(),
             )
             .unwrap();
+
+        // Assign random
+        let random = self
+            .assign_random(
+                layouter.namespace(|| "assign_random"),
+                config.numeric_config.clone(),
+            )
+            .unwrap();
+
+        // If have embedding then use random to initialize embedding lookup
+        let assigned_embeddings = assigned_tensor_map
+            .iter()
+            .filter(|(k, _)| k.starts_with("embedding"))
+            .map(|(_, v)| v.clone())
+            .collect::<Vec<_>>();
+
+        // If embeddings exist
+        if !assigned_embeddings.is_empty() {
+            let dot = DotVecLayouter::construct(config.numeric_config.clone());
+            layouter
+                .namespace(|| "rand_embeddings")
+                .assign_region(
+                    || "compute random embedding",
+                    |mut region| {
+                        let region = &mut region;
+                        let mut row_offset = 0;
+                        let rand_embeddings = assigned_embeddings
+                            .iter()
+                            .map(|emb| {
+                                emb.outer_iter()
+                                    .map(|e| {
+                                        let emb_dim = e.len();
+                                        let rand_e = dot
+                                            .layout(
+                                                region,
+                                                row_offset,
+                                                &vec![
+                                                    e.iter().map(|x| x.as_ref()).collect(),
+                                                    random[0..emb_dim]
+                                                        .iter()
+                                                        .map(|x| x.as_ref())
+                                                        .collect(),
+                                                ],
+                                                &vec![],
+                                            )
+                                            .unwrap();
+                                        row_offset = rand_e.1;
+                                        rand_e.0[0].clone()
+                                    })
+                                    .collect::<Vec<_>>()
+                            })
+                            .collect::<Vec<_>>();
+                        self.assign_gather_lookup(
+                            region,
+                            config.numeric_config.clone(),
+                            rand_embeddings,
+                        )
+                        .unwrap();
+                        Ok(())
+                    },
+                )
+                .unwrap();
+        }
 
         // Load lookups
         for numeric_type in config.numeric_config.used_numerics.iter() {
@@ -215,7 +393,6 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
 
         // Run the circuit by each operation chips
         for op in self.graph.nodes.iter() {
-            print!("op: {:?}\t", op.op_type);
             // Get inputs
             let inputs = op
                 .inputs
@@ -224,16 +401,63 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
                 .collect();
             // Run the operation
             let outputs = match match_op_type(op.op_type.clone()) {
+                OPType::Gather => GatherChip::<F>::construct(config.numeric_config.clone())
+                    .forward(
+                        layouter.namespace(|| op.op_type.clone()),
+                        &inputs,
+                        &constants,
+                        &random,
+                        &op.attributes,
+                    ),
+                OPType::Unsqueeze => UnsqueezeChip::<F>::construct(config.numeric_config.clone())
+                    .forward(
+                        layouter.namespace(|| op.op_type.clone()),
+                        &inputs,
+                        &constants,
+                        &random,
+                        &op.attributes,
+                    ),
+                OPType::FM => FMChip::<F>::construct(config.numeric_config.clone()).forward(
+                    layouter.namespace(|| op.op_type.clone()),
+                    &inputs,
+                    &constants,
+                    &random,
+                    &op.attributes,
+                ),
+                OPType::Mean => MeanChip::<F>::construct(config.numeric_config.clone()).forward(
+                    layouter.namespace(|| op.op_type.clone()),
+                    &inputs,
+                    &constants,
+                    &random,
+                    &op.attributes,
+                ),
+                OPType::Concat => ConcatChip::<F>::construct(config.numeric_config.clone())
+                    .forward(
+                        layouter.namespace(|| op.op_type.clone()),
+                        &inputs,
+                        &constants,
+                        &random,
+                        &op.attributes,
+                    ),
                 OPType::GEMM => GemmChip::<F>::construct(config.numeric_config.clone()).forward(
                     layouter.namespace(|| op.op_type.clone()),
                     &inputs,
                     &constants,
+                    &random,
+                    &op.attributes,
+                ),
+                OPType::Add => AddChip::<F>::construct(config.numeric_config.clone()).forward(
+                    layouter.namespace(|| op.op_type.clone()),
+                    &inputs,
+                    &constants,
+                    &random,
                     &op.attributes,
                 ),
                 OPType::ReLU => ReLUChip::<F>::construct(config.numeric_config.clone()).forward(
                     layouter.namespace(|| op.op_type.clone()),
                     &inputs,
                     &constants,
+                    &random,
                     &op.attributes,
                 ),
                 OPType::SoftMax => SoftMaxChip::<F>::construct(config.numeric_config.clone())
@@ -241,12 +465,37 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
                         layouter.namespace(|| op.op_type.clone()),
                         &inputs,
                         &constants,
+                        &random,
+                        &op.attributes,
+                    ),
+                OPType::Conv => ConvChip::<F>::construct(config.numeric_config.clone()).forward(
+                    layouter.namespace(|| op.op_type.clone()),
+                    &inputs,
+                    &constants,
+                    &random,
+                    &op.attributes,
+                ),
+                OPType::MaxPool => MaxPoolChip::<F>::construct(config.numeric_config.clone())
+                    .forward(
+                        layouter.namespace(|| op.op_type.clone()),
+                        &inputs,
+                        &constants,
+                        &random,
+                        &op.attributes,
+                    ),
+                OPType::Reshape => ReshapeChip::<F>::construct(config.numeric_config.clone())
+                    .forward(
+                        layouter.namespace(|| op.op_type.clone()),
+                        &inputs,
+                        &constants,
+                        &random,
                         &op.attributes,
                     ),
                 OPType::None => NoneChip::<F>::construct(config.numeric_config.clone()).forward(
                     layouter.namespace(|| op.op_type.clone()),
                     &inputs,
                     &constants,
+                    &random,
                     &op.attributes,
                 ),
                 _ => panic!("Operation type not supported"),
@@ -256,44 +505,32 @@ impl<F: PrimeField + Ord + FromUniformBytes<64>> Circuit<F> for ForwardCircuit<F
             for (op, output) in op.outputs.iter().zip(outputs.into_iter()) {
                 assigned_tensor_map.insert(op.clone(), output);
             }
-            println!("forward circuit compute successfully!");
-            // println!("{:?}", layouter.)
+            debug!(
+                "op: {:?}\t forward circuit compute successfully!",
+                op.op_type
+            );
         }
 
+        // Output
+        let output_name = self.graph.nodes[self.graph.nodes.len() - 1].outputs[0].clone();
+        let output = assigned_tensor_map.get(&output_name).unwrap().clone();
+        debug!("output: {:?}", output);
+
+        // Assign the output
+        self.copy_assign_vector(
+            layouter.namespace(|| "assign output"),
+            &config.numeric_config.assigned,
+            &output.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
+        )?;
+
         // Constrain the output
-        let output = assigned_tensor_map.get("output").unwrap().clone();
         for (i, cell) in output.iter().enumerate() {
             layouter
+                .namespace(|| "constrain public instance")
                 .constrain_instance(cell.as_ref().cell(), config.public, i)
                 .unwrap();
         }
 
-        // Hash the weights
-        let mut hash_output = vec![];
-        if config.hasher.is_some() {
-            print!("Hashing the weights...");
-            let hasher = config.hasher.as_ref().unwrap();
-            let weight = AssignedWeight::<F>::construct(
-                self.graph.nodes.clone(),
-                assigned_tensor_map.clone(),
-            );
-            hash_output.push(hasher.hash_vec_to_one(
-                layouter.namespace(|| "hash_vec"),
-                weight.to_vec(),
-                constants[&0].clone(),
-            )?);
-            println!("successfully!");
-        }
-
-        // Constrain the hash output
-        let offset = output.len();
-        if config.hasher.is_some() {
-            for (i, cell) in hash_output.iter().enumerate() {
-                layouter
-                    .constrain_instance(cell.cell(), config.public, i + offset)
-                    .unwrap();
-            }
-        }
         Ok(())
     }
 }

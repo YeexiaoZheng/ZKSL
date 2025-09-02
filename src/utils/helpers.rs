@@ -1,10 +1,14 @@
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::Mutex,
 };
 
-use halo2_proofs::{circuit::AssignedCell, halo2curves::ff::PrimeField};
+use halo2_proofs::{
+    circuit::{AssignedCell, Value},
+    halo2curves::ff::PrimeField,
+    plonk::ConstraintSystem,
+};
 use lazy_static::lazy_static;
 use ndarray::{Array, ArrayView, IxDyn};
 use num_bigint::BigUint;
@@ -19,18 +23,35 @@ use super::math::Int;
 
 pub type Tensor = Array<Int, IxDyn>;
 pub type FieldTensor<F> = Array<F, IxDyn>;
+pub type ValueTensor<F> = Array<Value<F>, IxDyn>;
+
 pub type CellRc<F> = Rc<AssignedCell<F, F>>;
 pub type AssignedTensor<F> = Array<CellRc<F>, IxDyn>;
 pub type AssignedTensorRef<'a, F> = ArrayView<'a, CellRc<F>, IxDyn>;
+
+// We can alias Field to support different prime fields
+// trait Field = PrimeField;
 
 lazy_static! {
     pub static ref NUMERIC_CONFIG: Mutex<NumericConfig> = Mutex::new(NumericConfig::default());
 }
 
+pub fn get_numeric_config() -> NumericConfig {
+    NUMERIC_CONFIG.lock().unwrap().clone()
+}
+
+pub fn get_circuit_numeric_config<F: PrimeField>(meta: &mut ConstraintSystem<F>) -> NumericConfig {
+    let mut numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
+    let lookup_max = (1 << numeric_config.k) - (meta.blinding_factors() + 1) - 1;
+    numeric_config.num_rows = lookup_max;
+    numeric_config.min_val = -(lookup_max as Int) / 2;
+    numeric_config.max_val = lookup_max as Int - (lookup_max as Int) / 2;
+    numeric_config
+}
+
 pub fn configure_static_numeric_config(
-    k: usize,
+    k: u32,
     num_cols: usize,
-    max_val: Int,
     scale_factor: u64,
     batch_size: usize,
     used_numerics: BTreeSet<NumericType>,
@@ -41,13 +62,10 @@ pub fn configure_static_numeric_config(
     *nconfig.lock().unwrap() = NumericConfig {
         k,
         scale_factor,
-        num_rows: (1 << k) - 10 + 1,
         num_cols,
-        max_val,
-        min_val: -(max_val + 1),
         use_selectors: true,
         batch_size,
-        used_numerics: Arc::new(used_numerics),
+        used_numerics: used_numerics,
         commitment: true,
         ..cloned
     };
@@ -62,22 +80,25 @@ pub fn configure_static(numeric_config: NumericConfig) -> NumericConfig {
 pub fn configure_static_numeric_config_default() -> NumericConfig {
     let nconfig = &NUMERIC_CONFIG;
     let cloned = nconfig.lock().unwrap().clone();
-    let k = 10;
+    let k = 14;
     let new_numeric_config = NumericConfig {
         k,
-        scale_factor: 100,
-        num_rows: (1 << k) - 10 + 1,
-        num_cols: 12,
-        max_val: (1 << (k - 1)) - 10,
-        min_val: -(1 << (k - 1)),
+        scale_factor: 512,
+        num_cols: 11,
         use_selectors: true,
         batch_size: 1,
-        learning_rate: 1,
-        commitment: true,
+        random_size: 1000,
+        assigned_num_cols: 1,
+        reciprocal_learning_rate: 1,
+        commitment: false,
         ..cloned
     };
     *nconfig.lock().unwrap() = new_numeric_config.clone();
     new_numeric_config
+}
+
+pub fn set_log_level(log_level: log::LevelFilter) {
+    env_logger::builder().filter_level(log_level).init();
 }
 
 pub fn to_field<F: PrimeField>(x: Int) -> F {
@@ -94,13 +115,15 @@ pub fn to_primitive<F: PrimeField>(x: &F) -> Int {
     big as Int - bias
 }
 
-pub fn update_graph(orginal_graph: &Graph, tensor_map: &HashMap<String, Tensor>) -> Graph {
+pub fn update_graph(orginal_graph: &Graph, tensor_map: &BTreeMap<String, Tensor>) -> Graph {
     let mut graph = orginal_graph.clone();
-    graph.tensor_map.clear();
+    // graph.tensor_map.clear();
     for k in orginal_graph.tensor_map.keys() {
-        graph
-            .tensor_map
-            .insert(k.clone(), tensor_map.get(k).unwrap().clone());
+        if tensor_map.contains_key(k) {
+            graph
+                .tensor_map
+                .insert(k.clone(), tensor_map.get(k).unwrap().clone());
+        }
     }
     graph
 }

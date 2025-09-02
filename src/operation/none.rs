@@ -1,4 +1,4 @@
-use std::{collections::HashMap, marker::PhantomData, rc::Rc};
+use std::{collections::BTreeMap, marker::PhantomData, rc::Rc};
 
 use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
 use ndarray::ShapeError;
@@ -31,7 +31,7 @@ impl<F: PrimeField> NoneChip<F> {
     pub fn forward(
         inputs: &Vec<Tensor>,
         _numeric_config: &NumericConfig,
-        _attributes: &HashMap<String, f64>,
+        _attributes: &BTreeMap<String, Vec<f64>>,
     ) -> Result<Vec<Tensor>, ShapeError> {
         Ok(inputs.clone())
     }
@@ -40,7 +40,7 @@ impl<F: PrimeField> NoneChip<F> {
     pub fn backward(
         inputs: &Vec<Tensor>,
         _numeric_config: &NumericConfig,
-        _attributes: &HashMap<String, f64>,
+        _attributes: &BTreeMap<String, Vec<f64>>,
     ) -> Result<Vec<Tensor>, ShapeError> {
         Ok(inputs.clone())
     }
@@ -51,8 +51,9 @@ impl<F: PrimeField> Operation<F> for NoneChip<F> {
         &self,
         _layouter: impl Layouter<F>,
         _inputs: &Vec<AssignedTensorRef<F>>,
-        _constants: &HashMap<Int, CellRc<F>>,
-        _attributes: &HashMap<String, f64>,
+        _constants: &BTreeMap<Int, CellRc<F>>,
+        _random: &Vec<CellRc<F>>,
+        _attributes: &BTreeMap<String, Vec<f64>>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         Ok(vec![])
     }
@@ -61,8 +62,9 @@ impl<F: PrimeField> Operation<F> for NoneChip<F> {
         &self,
         _layouter: impl Layouter<F>,
         _inputs: &Vec<AssignedTensorRef<F>>,
-        _constants: &HashMap<Int, CellRc<F>>,
-        _attributes: &HashMap<String, f64>,
+        _constants: &BTreeMap<Int, CellRc<F>>,
+        _random: &Vec<CellRc<F>>,
+        _attributes: &BTreeMap<String, Vec<f64>>,
     ) -> Result<Vec<AssignedTensor<F>>, ShapeError> {
         Ok(vec![])
     }

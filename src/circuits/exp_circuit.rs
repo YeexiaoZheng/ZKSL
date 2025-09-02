@@ -1,249 +1,250 @@
-use std::{collections::HashMap, marker::PhantomData, rc::Rc};
+// use std::{collections::BTreeMap, marker::PhantomData, rc::Rc};
 
-use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
-    halo2curves::ff::PrimeField,
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
-};
+// use halo2_proofs::{
+//     circuit::{AssignedCell, Layouter, SimpleFloorPlanner, Value},
+//     halo2curves::ff::PrimeField,
+//     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
+// };
 
-use crate::{
-    numeric::{
-        lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip},
-        nonlinear::{exp::ExpChip, relu::ReluChip},
-        {Numeric, NumericConfig, NumericType},
-    },
-    utils::{
-        helpers::{to_field, CellRc, NUMERIC_CONFIG},
-        matcher::match_load_lookups,
-        math::Int,
-    },
-};
+// use crate::{
+//     numeric::{
+//         lookups::{field_lookup::FieldLookUpChip, row_lookup::RowLookUpChip},
+//         nonlinear::{exp::ExpChip, relu::ReluChip},
+//         {Numeric, NumericConfig, NumericType},
+//     },
+//     utils::{
+//         helpers::{to_field, CellRc, NUMERIC_CONFIG},
+//         matcher::match_load_lookups,
+//         math::Int,
+//     },
+// };
 
-#[derive(Clone, Debug)]
-pub struct ExpConfig<F: PrimeField> {
-    pub numeric_config: Rc<NumericConfig>,
-    pub public: Column<Instance>,
-    pub _marker: PhantomData<F>,
-}
+// #[derive(Clone, Debug)]
+// pub struct ExpConfig<F: PrimeField> {
+//     pub numeric_config: Rc<NumericConfig>,
+//     pub public: Column<Instance>,
+//     pub _marker: PhantomData<F>,
+// }
 
-pub struct ExpCircuit<F: PrimeField> {
-    pub input: Vec<F>,
-}
+// pub struct ExpCircuit<F: PrimeField> {
+//     pub input: Vec<F>,
+// }
 
-impl<F: PrimeField> ExpCircuit<F> {
-    pub fn construct(input: Vec<F>) -> Self {
-        Self { input }
-    }
+// impl<F: PrimeField> ExpCircuit<F> {
+//     pub fn construct(input: Vec<F>) -> Self {
+//         Self { input }
+//     }
 
-    pub fn assign_tensor(
-        &self,
-        mut layouter: impl Layouter<F>,
-        columns: &Vec<Column<Advice>>,
-        input: &Vec<F>,
-    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
-        Ok(layouter.assign_region(
-            || "assign input",
-            |mut region| {
-                let mut cell_idx = 0;
-                input
-                    .iter()
-                    .map(|cell| {
-                        let row_idx = cell_idx / columns.len();
-                        let col_idx = cell_idx % columns.len();
-                        cell_idx += 1;
-                        let out = region.assign_advice(
-                            || "assign tensor cell",
-                            columns[col_idx],
-                            row_idx,
-                            || Value::known(*cell),
-                        )?;
-                        Ok(out)
-                    })
-                    .collect::<Result<Vec<_>, Error>>()
-            },
-        )?)
-    }
+//     pub fn assign_tensor(
+//         &self,
+//         mut layouter: impl Layouter<F>,
+//         columns: &Vec<Column<Advice>>,
+//         input: &Vec<F>,
+//     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
+//         Ok(layouter.assign_region(
+//             || "assign input",
+//             |mut region| {
+//                 let mut cell_idx = 0;
+//                 input
+//                     .iter()
+//                     .map(|cell| {
+//                         let row_idx = cell_idx / columns.len();
+//                         let col_idx = cell_idx % columns.len();
+//                         cell_idx += 1;
+//                         let out = region.assign_advice(
+//                             || "assign tensor cell",
+//                             columns[col_idx],
+//                             row_idx,
+//                             || Value::known(*cell),
+//                         )?;
+//                         Ok(out)
+//                     })
+//                     .collect::<Result<Vec<_>, Error>>()
+//             },
+//         )?)
+//     }
 
-    pub fn assign_constant(
-        &self,
-        mut layouter: impl Layouter<F>,
-        config: Rc<NumericConfig>,
-    ) -> Result<HashMap<Int, CellRc<F>>, Error> {
-        let sf = config.scale_factor;
-        // let min_val = config.min_val;
-        // let max_val = config.max_val;
+//     pub fn assign_constant(
+//         &self,
+//         mut layouter: impl Layouter<F>,
+//         config: Rc<NumericConfig>,
+//     ) -> Result<BTreeMap<Int, CellRc<F>>, Error> {
+//         let sf = config.scale_factor;
+//         // let min_val = config.min_val;
+//         // let max_val = config.max_val;
 
-        Ok(layouter.assign_region(
-            || "constants",
-            |mut region| {
-                let mut constants: HashMap<Int, CellRc<F>> = HashMap::new();
+//         Ok(layouter.assign_region(
+//             || "constants",
+//             |mut region| {
+//                 let mut constants: BTreeMap<Int, CellRc<F>> = BTreeMap::new();
 
-                let vals = vec![0 as Int, 1, sf as Int /*min_val, max_val*/];
-                for (i, val) in vals.iter().enumerate() {
-                    let cell = region.assign_fixed(
-                        || format!("constant_{}", i),
-                        config.constants[0],
-                        i,
-                        || Value::known(to_field::<F>(*val)),
-                    )?;
-                    constants.insert(*val, Rc::new(cell));
-                }
+//                 let vals = vec![0 as Int, 1, sf as Int /*min_val, max_val*/];
+//                 for (i, val) in vals.iter().enumerate() {
+//                     let cell = region.assign_fixed(
+//                         || format!("constant_{}", i),
+//                         config.constants[0],
+//                         i,
+//                         || Value::known(to_field::<F>(*val)),
+//                     )?;
+//                     constants.insert(*val, Rc::new(cell));
+//                 }
 
-                Ok(constants)
-            },
-        )?)
-    }
-}
+//                 Ok(constants)
+//             },
+//         )?)
+//     }
+// }
 
-impl<F: PrimeField> Circuit<F> for ExpCircuit<F> {
-    type Config = ExpConfig<F>;
-    type FloorPlanner = SimpleFloorPlanner;
+// impl<F: PrimeField> Circuit<F> for ExpCircuit<F> {
+//     type Config = ExpConfig<F>;
+//     type FloorPlanner = SimpleFloorPlanner;
+//     type Params = ();
 
-    fn without_witnesses(&self) -> Self {
-        todo!()
-    }
+//     fn without_witnesses(&self) -> Self {
+//         todo!()
+//     }
 
-    fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
-        // Get numeric config from global state
-        let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
+//     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
+//         // Get numeric config from global state
+//         let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
 
-        // Create columns & constants
-        let columns = (0..numeric_config.num_cols)
-            .map(|_| meta.advice_column())
-            .collect::<Vec<_>>();
-        for col in columns.iter() {
-            meta.enable_equality(*col);
-        }
-        let constants = vec![meta.fixed_column()];
-        for cst in constants.iter() {
-            meta.enable_equality(*cst);
-        }
-        // Update numeric config
-        let numeric_config = NumericConfig {
-            columns,
-            constants,
-            ..numeric_config
-        };
+//         // Create columns & constants
+//         let columns = (0..numeric_config.num_cols)
+//             .map(|_| meta.advice_column())
+//             .collect::<Vec<_>>();
+//         for col in columns.iter() {
+//             meta.enable_equality(*col);
+//         }
+//         let constants = vec![meta.fixed_column()];
+//         for cst in constants.iter() {
+//             meta.enable_equality(*cst);
+//         }
+//         // Update numeric config
+//         let numeric_config = NumericConfig {
+//             columns,
+//             constants,
+//             ..numeric_config
+//         };
 
-        // Configure numeric chips
-        let numeric_config = FieldLookUpChip::<F>::configure(meta, numeric_config);
-        let numeric_config = RowLookUpChip::<F>::configure(meta, numeric_config);
-        let numeric_config = ExpChip::<F>::configure(meta, numeric_config);
-        let numeric_config = ReluChip::<F>::configure(meta, numeric_config);
+//         // Configure numeric chips
+//         let numeric_config = FieldLookUpChip::<F>::configure(meta, numeric_config);
+//         let numeric_config = RowLookUpChip::<F>::configure(meta, numeric_config);
+//         let numeric_config = ExpChip::<F>::configure(meta, numeric_config);
+//         let numeric_config = ReluChip::<F>::configure(meta, numeric_config);
 
-        // Create public column
-        let public = meta.instance_column();
-        meta.enable_equality(public);
+//         // Create public column
+//         let public = meta.instance_column();
+//         meta.enable_equality(public);
 
-        Self::Config {
-            numeric_config: Rc::new(numeric_config),
-            public,
-            _marker: PhantomData,
-        }
-    }
+//         Self::Config {
+//             numeric_config: Rc::new(numeric_config),
+//             public,
+//             _marker: PhantomData,
+//         }
+//     }
 
-    fn synthesize(
-        &self,
-        config: Self::Config,
-        mut layouter: impl Layouter<F>,
-    ) -> Result<(), Error> {
-        // Construct Exp chip
-        let config_rc = config.numeric_config.clone();
-        let exp_chip = ExpChip::<F>::construct(config_rc.clone());
+//     fn synthesize(
+//         &self,
+//         config: Self::Config,
+//         mut layouter: impl Layouter<F>,
+//     ) -> Result<(), Error> {
+//         // Construct Exp chip
+//         let config_rc = config.numeric_config.clone();
+//         let exp_chip = ExpChip::<F>::construct(config_rc.clone());
 
-        // Assign input tensors
-        let input = self
-            .assign_tensor(
-                layouter.namespace(|| "assign_inputs"),
-                &exp_chip.config.columns,
-                &self.input,
-            )
-            .unwrap();
+//         // Assign input tensors
+//         let input = self
+//             .assign_tensor(
+//                 layouter.namespace(|| "assign_inputs"),
+//                 &exp_chip.config.columns,
+//                 &self.input,
+//             )
+//             .unwrap();
 
-        // Load lookups
-        match_load_lookups(
-            config.numeric_config.clone(),
-            NumericType::FieldLookUp,
-            layouter.namespace(|| "load field lookups"),
-        )
-        .unwrap();
-        match_load_lookups(
-            config.numeric_config.clone(),
-            NumericType::RowLookUp,
-            layouter.namespace(|| "load field lookups"),
-        )
-        .unwrap();
-        match_load_lookups(
-            config.numeric_config.clone(),
-            NumericType::Relu,
-            layouter.namespace(|| "load relu lookups"),
-        )
-        .unwrap();
-        match_load_lookups(
-            config.numeric_config.clone(),
-            NumericType::Exp,
-            layouter.namespace(|| "load exp lookups"),
-        )
-        .unwrap();
+//         // Load lookups
+//         match_load_lookups(
+//             config.numeric_config.clone(),
+//             NumericType::FieldLookUp,
+//             layouter.namespace(|| "load field lookups"),
+//         )
+//         .unwrap();
+//         match_load_lookups(
+//             config.numeric_config.clone(),
+//             NumericType::RowLookUp,
+//             layouter.namespace(|| "load field lookups"),
+//         )
+//         .unwrap();
+//         match_load_lookups(
+//             config.numeric_config.clone(),
+//             NumericType::Relu,
+//             layouter.namespace(|| "load relu lookups"),
+//         )
+//         .unwrap();
+//         match_load_lookups(
+//             config.numeric_config.clone(),
+//             NumericType::Exp,
+//             layouter.namespace(|| "load exp lookups"),
+//         )
+//         .unwrap();
 
-        // Assign constants
-        let constants = self
-            .assign_constant(layouter.namespace(|| "assign_constants"), config_rc.clone())
-            .unwrap();
+//         // Assign constants
+//         let constants = self
+//             .assign_constant(layouter.namespace(|| "assign_constants"), config_rc.clone())
+//             .unwrap();
 
-        // Forward pass
-        let outputs = exp_chip
-            .compute(
-                layouter.namespace(|| "Exp"),
-                &vec![input.iter().collect()],
-                &vec![
-                    constants.get(&0).unwrap().as_ref(),
-                    constants.get(&1).unwrap().as_ref(),
-                ],
-            )
-            .unwrap();
-        // println!("outputs: {:#?}", outputs);
+//         // Forward pass
+//         let outputs = exp_chip
+//             .compute(
+//                 layouter.namespace(|| "Exp"),
+//                 &vec![input.iter().collect()],
+//                 &vec![
+//                     constants.get(&0).unwrap().as_ref(),
+//                     constants.get(&1).unwrap().as_ref(),
+//                 ],
+//             )
+//             .unwrap();
+//         // println!("outputs: {:#?}", outputs);
 
-        // Constrain public output
-        let mut public_layouter = layouter.namespace(|| "public");
-        for (i, cell) in outputs.iter().enumerate() {
-            public_layouter.constrain_instance(cell.cell(), config.public, i)?;
-        }
+//         // Constrain public output
+//         let mut public_layouter = layouter.namespace(|| "public");
+//         for (i, cell) in outputs.iter().enumerate() {
+//             public_layouter.constrain_instance(cell.cell(), config.public, i)?;
+//         }
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
 
-#[test]
-fn test_exp_circuit() {
-    use crate::utils::helpers::configure_static_numeric_config_default;
-    use crate::utils::math::exp;
-    use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
+// #[test]
+// fn test_exp_circuit() {
+//     use crate::utils::helpers::configure_static_numeric_config_default;
+//     use crate::utils::math::exp;
+//     use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
 
-    let numeric_config = configure_static_numeric_config_default();
+//     let numeric_config = configure_static_numeric_config_default();
 
-    // original vector
-    let v_input: Vec<Int> = vec![0, 1, 2, 3, 4, 100];
-    let v_output: Vec<Int> = v_input
-        .iter()
-        .map(|x| exp(*x, numeric_config.scale_factor))
-        .collect();
-    println!("v_input: {:?}", v_input);
-    println!("v_output: {:?}", v_output);
+//     // original vector
+//     let v_input: Vec<Int> = vec![0, 1, 2, 3, 4, 100];
+//     let v_output: Vec<Int> = v_input
+//         .iter()
+//         .map(|x| exp(*x, numeric_config.scale_factor))
+//         .collect();
+//     println!("v_input: {:?}", v_input);
+//     println!("v_output: {:?}", v_output);
 
-    // field vector
-    let f_input = v_input
-        .iter()
-        .map(|x| to_field::<Fr>(*x))
-        .collect::<Vec<_>>();
-    let f_output = v_output
-        .iter()
-        .map(|x| to_field::<Fr>(*x))
-        .collect::<Vec<_>>();
+//     // field vector
+//     let f_input = v_input
+//         .iter()
+//         .map(|x| to_field::<Fr>(*x))
+//         .collect::<Vec<_>>();
+//     let f_output = v_output
+//         .iter()
+//         .map(|x| to_field::<Fr>(*x))
+//         .collect::<Vec<_>>();
 
-    let circuit = ExpCircuit::construct(f_input);
+//     let circuit = ExpCircuit::construct(f_input);
 
-    let prover = MockProver::run(numeric_config.k as u32, &circuit, vec![f_output]).unwrap();
+//     let prover = MockProver::run(numeric_config.k as u32, &circuit, vec![f_output]).unwrap();
 
-    assert_eq!(prover.verify(), Ok(()));
-}
+//     assert_eq!(prover.verify(), Ok(()));
+// }

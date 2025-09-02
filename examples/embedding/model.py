@@ -11,6 +11,8 @@ class EmbeddingModel(nn.Module):
 
     def forward(self, x):
         x = self.embedding(x)
+        # x = self.fc1(x)
+        x = x.mean(dim=1)  # 对嵌入进行平均
         x = self.relu(self.fc1(x))
         x = self.fc2(x)
         return x
@@ -27,20 +29,20 @@ def train_model(model, data_loader, criterion, optimizer, num_epochs):
         print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item()}')
 
 # Generate random training data
-vocab_size = 100
-embedding_dim = 30
-hidden_dim = 64
-output_dim = 10
+vocab_size = 10
+embedding_dim = 3
+hidden_dim = 32
+output_dim = 2
 batch_size = 32
 sequence_length = 10
 num_samples = 1000
 
 # Random input data (token indices) and random target labels
-input_data = torch.randint(0, vocab_size, (num_samples, sequence_length))
-target_data = torch.randint(0, output_dim, (num_samples, sequence_length))
+inputs = torch.randint(0, vocab_size, (num_samples, 10))  # 每个句子长度为10
+labels = torch.randint(0, 2, (num_samples,))  # 二分类标签
 
 # Create a DataLoader
-dataset = torch.utils.data.TensorDataset(input_data, target_data)
+dataset = torch.utils.data.TensorDataset(inputs, labels)
 train_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 # Initialize the model, criterion, and optimizer
@@ -53,7 +55,7 @@ train_model(model, train_loader, criterion, optimizer, num_epochs=10)
 
 # Export the model to ONNX
 dummy_input = torch.randint(0, vocab_size, (1, sequence_length))
-torch.onnx.export(model, dummy_input, "model.onnx", 
-                  input_names=['input'], output_names=['output'], 
+torch.onnx.export(model, dummy_input, "model.onnx",
+                  input_names=['input'], output_names=['output'],
                   dynamic_axes={'input': {0: 'batch_size'}, 'output': {0: 'batch_size'}})
 print("Model has been exported to model.onnx")

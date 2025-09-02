@@ -1,30 +1,34 @@
-use std::{collections::BTreeSet, marker::PhantomData, rc::Rc};
+use std::{collections::BTreeSet, marker::PhantomData, rc::Rc, vec};
 
 use crate::{
     loss::{softmax::SoftMaxLossChip, Loss, LossType},
     numeric::{NumericConfig, NumericConsumer, NumericType},
     utils::{
-        helpers::{to_field, FieldTensor, Tensor, NUMERIC_CONFIG},
+        helpers::{
+            configure_static, get_circuit_numeric_config, get_numeric_config, to_field,
+            FieldTensor, Tensor,
+        },
         matcher::{match_configure, match_load_lookups},
         math::Int,
     },
 };
 
+use super::assign::Assign;
+use crate::loss::sigmoid::SigmoidCrossEntropyLossChip;
 use halo2_proofs::{
     circuit::{Layouter, SimpleFloorPlanner},
     halo2curves::ff::PrimeField,
     plonk::{Circuit, Column, ConstraintSystem, Error, Instance},
 };
+use log::debug;
 use ndarray::{Array, ShapeError};
 
-use super::assign::Assign;
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct GradientCircuit<F: PrimeField> {
     pub score: Tensor,
     pub field_score: FieldTensor<F>,
     pub label: Vec<Int>,
-    pub field_label: Vec<F>,
+    pub field_label: FieldTensor<F>, // it need to be one-hot vectors
     pub loss: LossType,
     pub used_numerics: BTreeSet<NumericType>,
 }
@@ -38,10 +42,21 @@ pub struct GradientConfig<F: PrimeField> {
 
 impl<F: PrimeField> GradientCircuit<F> {
     pub fn construct(score: Tensor, label: Vec<Int>, loss: LossType) -> Self {
+        assert_eq!(
+            score.shape()[0],
+            label.len(),
+            "score and label batch size should be same"
+        );
         let used_numerics = BTreeSet::from_iter(match loss {
             LossType::SoftMax => {
                 Box::new(SoftMaxLossChip::<F>::construct(Default::default()))
                     as Box<dyn NumericConsumer>
+            }
+            .used_numerics(),
+            LossType::Sigmoid => {
+                Box::new(SigmoidCrossEntropyLossChip::<F>::construct(
+                    Default::default(),
+                )) as Box<dyn NumericConsumer>
             }
             .used_numerics(),
             _ => vec![],
@@ -51,7 +66,31 @@ impl<F: PrimeField> GradientCircuit<F> {
             score.iter().map(|x| to_field::<F>(*x)).collect(),
         )
         .unwrap();
-        let field_label = label.iter().map(|x| to_field::<F>(*x)).collect::<Vec<_>>();
+        let one_hot = vec![0; score.shape()[1]];
+        let field_label = label
+            .iter()
+            .map(|&x| {
+                let mut one_hot = one_hot.clone();
+                match loss {
+                    LossType::SoftMax => {
+                        one_hot[x as usize] = 1;
+                        one_hot
+                    }
+                    LossType::Sigmoid => {
+                        one_hot[0] = x;
+                        one_hot
+                    }
+                    _ => panic!("Not implemented yet"),
+                }
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        let field_label = Array::from_shape_vec(
+            (label.len(), score.shape()[1]),
+            field_label.iter().map(|x| to_field::<F>(*x)).collect(),
+        )
+        .unwrap()
+        .into_dyn();
 
         Self {
             score,
@@ -64,12 +103,29 @@ impl<F: PrimeField> GradientCircuit<F> {
     }
 
     pub fn run(&self) -> Result<(Int, Tensor), ShapeError> {
-        let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
+        let numeric_config = get_numeric_config();
         let loss_func = match self.loss {
             LossType::SoftMax => SoftMaxLossChip::<F>::compute,
+            LossType::Sigmoid => SigmoidCrossEntropyLossChip::<F>::compute,
             _ => panic!("Not implemented yet"),
         };
+        debug!("score:{}, label:{:?}", self.score, self.label);
+
+        self.configure_numeric();
+
         loss_func(&self.score, &self.label, &numeric_config)
+    }
+
+    pub fn configure_numeric(&self) -> NumericConfig {
+        configure_static(NumericConfig {
+            batch_size: self.label.len(),
+            used_numerics: self.used_numerics.clone().into(),
+            ..get_numeric_config().clone()
+        })
+    }
+
+    pub fn commitment_lengths(&self) -> Vec<usize> {
+        vec![]
     }
 }
 
@@ -80,12 +136,12 @@ impl<F: PrimeField> Circuit<F> for GradientCircuit<F> {
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
-        todo!()
+        Default::default()
     }
 
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         // Get numeric config from global state
-        let numeric_config = NUMERIC_CONFIG.lock().unwrap().clone();
+        let numeric_config = get_circuit_numeric_config(meta);
 
         // Create columns & constants
         let columns = (0..numeric_config.num_cols)
@@ -105,6 +161,10 @@ impl<F: PrimeField> Circuit<F> for GradientCircuit<F> {
             constants,
             ..numeric_config
         };
+        // Add NaturalLookUp to the used numerics
+        numeric_config
+            .used_numerics
+            .insert(NumericType::NaturalLookUp);
 
         // Configure each numerics
         let iter = <BTreeSet<NumericType> as Clone>::clone(&numeric_config.used_numerics.clone())
@@ -138,7 +198,7 @@ impl<F: PrimeField> Circuit<F> for GradientCircuit<F> {
             )
             .unwrap();
         let assigned_label = self
-            .assign_vector(
+            .assign_tensor(
                 layouter.namespace(|| "assign_label"),
                 &config.numeric_config.columns,
                 &self.field_label,
@@ -171,25 +231,36 @@ impl<F: PrimeField> Circuit<F> for GradientCircuit<F> {
         // Run the circuit by each operation chips
         let output = match self.loss {
             LossType::SoftMax => {
-                let softmax_loss_chip =
+                let soft_max_loss_chip =
                     SoftMaxLossChip::<F>::construct(config.numeric_config.clone());
-                softmax_loss_chip.compute(
+                soft_max_loss_chip.compute(
                     layouter.namespace(|| "softmax loss"),
                     &assigned_score.view(),
-                    &assigned_label,
+                    &assigned_label.view(),
+                    &constants,
+                )
+            }
+            LossType::Sigmoid => {
+                let sigmoid_cross_entropy_loss_chip =
+                    SigmoidCrossEntropyLossChip::<F>::construct(config.numeric_config.clone());
+                sigmoid_cross_entropy_loss_chip.compute(
+                    layouter.namespace(|| "sigmoid loss"),
+                    &assigned_score.view(),
+                    &assigned_label.view(),
                     &constants,
                 )
             }
             _ => panic!("Not implemented yet"),
         }
         .unwrap();
+        debug!("output: {:?}", output);
 
         // Constrain the output
-        for (i, cell) in output.iter().enumerate() {
-            layouter
-                .constrain_instance(cell.as_ref().cell(), config.public, i)
-                .unwrap();
-        }
+        // for (i, cell) in output.iter().enumerate() {
+        //     layouter
+        //         .constrain_instance(cell.as_ref().cell(), config.public, i)
+        //         .unwrap();
+        // }
         Ok(())
     }
 }

@@ -1,3 +1,10 @@
+/.idea
 /target
-/jsons
-/examples/mnist_mlp2/data
+/params
+.DS_Store
+/halo2
+/halo2-gpu-specific
+/examples/deepfm/model_1129_.json
+/examples/lenet/data
+/examples/loan_default/batch_files
+/examples/loan_default/model_2.json

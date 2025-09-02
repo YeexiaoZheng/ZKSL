@@ -1,4 +1,4 @@
-use std::{collections::HashMap, marker::PhantomData, rc::Rc};
+use std::{collections::BTreeMap, marker::PhantomData, rc::Rc};
 
 use halo2_proofs::{
     circuit::{AssignedCell, Region},
@@ -7,19 +7,19 @@ use halo2_proofs::{
 };
 
 use crate::{
-    numeric::{Numeric, NumericConfig, NumericType},
+    numeric::{NumericConfig, NumericLayout, NumericType},
     utils::math::{exp, Int},
 };
 
-use super::NonLinearNumeric;
+use super::NonLinearNumericLayout;
 
 // IMPORTANT: It returns exp(x / scale_factor) * scale_factor
-pub struct ExpChip<F: PrimeField> {
+pub struct ExpLookUp<F: PrimeField> {
     pub config: Rc<NumericConfig>,
     pub _marker: PhantomData<F>,
 }
 
-impl<F: PrimeField> ExpChip<F> {
+impl<F: PrimeField> ExpLookUp<F> {
     pub fn construct(config: Rc<NumericConfig>) -> Self {
         Self {
             config,
@@ -31,23 +31,18 @@ impl<F: PrimeField> ExpChip<F> {
         meta: &mut ConstraintSystem<F>,
         numeric_config: NumericConfig,
     ) -> NumericConfig {
-        Self::_configure(
-            meta,
-            numeric_config,
-            NumericType::Exp,
-            NumericType::RowLookUp,
-        )
+        Self::_configure(meta, numeric_config, NumericType::Exp, true)
     }
 }
 
-impl<F: PrimeField> NonLinearNumeric<F> for ExpChip<F> {
-    fn generate_map(scale_factor: u64, min_val: Int, max_val: Int) -> HashMap<Int, Int> {
+impl<F: PrimeField> NonLinearNumericLayout<F> for ExpLookUp<F> {
+    fn generate_map(scale_factor: u64, min_val: Int, max_val: Int) -> BTreeMap<Int, Int> {
         (min_val..max_val)
             .map(|x| {
                 let exp = exp(x, scale_factor);
                 (x, exp)
             })
-            .collect::<HashMap<_, _>>()
+            .collect::<BTreeMap<_, _>>()
     }
 
     fn get_numeric_config(&self) -> Rc<NumericConfig> {
@@ -59,53 +54,54 @@ impl<F: PrimeField> NonLinearNumeric<F> for ExpChip<F> {
     }
 }
 
-impl<F: PrimeField> Numeric<F> for ExpChip<F> {
+impl<F: PrimeField> NumericLayout<F> for ExpLookUp<F> {
     fn name(&self) -> String {
         "Exp".to_string()
     }
 
-    fn num_cols_per_op(&self) -> usize {
-        <Self as NonLinearNumeric<F>>::num_cols_per_op()
+    fn num_rows_per_unit(&self) -> usize {
+        <Self as NonLinearNumericLayout<F>>::num_rows_per_unit()
     }
 
-    fn num_input_cols_per_row(&self) -> usize {
-        self.config.columns.len() / self.num_cols_per_op()
+    fn num_cols_per_row(&self) -> usize {
+        self.config.columns.len() / 2
     }
 
-    fn num_output_cols_per_row(&self) -> usize {
-        self.config.columns.len() / self.num_cols_per_op()
-    }
-
-    fn compute_row(
+    fn layout_unit(
         &self,
         region: &mut Region<F>,
         row_offset: usize,
+        copy_advice: bool,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,
         constants: &Vec<&AssignedCell<F, F>>,
     ) -> Result<Vec<AssignedCell<F, F>>, Error> {
-        <Self as NonLinearNumeric<F>>::compute_row(&self, region, row_offset, inputs, constants)
+        <Self as NonLinearNumericLayout<F>>::layout_unit(
+            &self,
+            region,
+            row_offset,
+            copy_advice,
+            inputs,
+            constants,
+        )
     }
 
-    fn compute(
+    fn layout_customise(
         &self,
-        mut layouter: impl halo2_proofs::circuit::Layouter<F>,
+        region: &mut Region<F>,
+        row_offset: usize,
+        rows_per_unit: usize,
+        copy_advice: bool,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,
         constants: &Vec<&AssignedCell<F, F>>,
-    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
-        let _zero = constants[0];
-        let one = constants[1];
-        let mut input = inputs[0].clone();
-        let input_len = input.len();
-        while input.len() % self.num_input_cols_per_row() != 0 {
-            input.push(one);
-        }
-        match self.compute_rows(
-            layouter.namespace(|| "Exp forward"),
-            &vec![input],
+    ) -> Result<(Vec<AssignedCell<F, F>>, usize), Error> {
+        <Self as NonLinearNumericLayout<F>>::layout_customise(
+            &self,
+            region,
+            row_offset,
+            rows_per_unit,
+            copy_advice,
+            inputs,
             constants,
-        ) {
-            Ok(outputs) => Ok(outputs[0..input_len].to_vec()),
-            Err(e) => panic!("Error in Exp forward compute rows: {}", e),
-        }
+        )
     }
 }

@@ -1,21 +1,20 @@
-use std::{collections::HashMap, marker::PhantomData, rc::Rc, vec};
+use std::{collections::BTreeMap, marker::PhantomData, rc::Rc, vec};
 
 use halo2_proofs::{circuit::Layouter, halo2curves::ff::PrimeField};
 use ndarray::{Array, Axis, ShapeError};
 
+use super::Loss;
 use crate::{
     numeric::{
-        accumulator::AccumulatorChip, div::DivChip, max::MaxChip, mul::MulChip,
-        nonlinear::exp::ExpChip, sub::SubChip, Numeric, NumericConfig, NumericConsumer,
-        NumericType,
+        div_same::DivSameLayouter, max::MaxLayouter, mul_same::MulSameLayouter,
+        nonlinear::exp::ExpLookUp, sub::SubLayouter, sub_same::SubSameLayouter, sum::SumLayouter,
+        NumericConfig, NumericConsumer, NumericLayout, NumericType,
     },
     utils::{
-        helpers::{to_primitive, AssignedTensor, AssignedTensorRef, CellRc, Tensor},
+        helpers::{AssignedTensor, AssignedTensorRef, CellRc, Tensor},
         math::{exp, ln, Int},
     },
 };
-
-use super::Loss;
 
 pub struct SoftMaxLossChip<F: PrimeField> {
     pub numeric_config: Rc<NumericConfig>,
@@ -44,7 +43,7 @@ impl<F: PrimeField> SoftMaxLossChip<F> {
         let max = Array::from_shape_vec(
             input.shape(),
             input
-                .axis_iter(Axis(0))
+                .outer_iter()
                 .map(|row| row.iter().fold(0, |acc, &x| acc.max(x)))
                 .map(|max| vec![max; input.shape()[1]])
                 .flatten()
@@ -82,123 +81,147 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
         &self,
         mut layouter: impl Layouter<F>,
         input: &AssignedTensorRef<F>,
-        label: &Vec<CellRc<F>>,
-        constants: &HashMap<Int, CellRc<F>>,
+        label: &AssignedTensorRef<F>,
+        constants: &BTreeMap<Int, CellRc<F>>,
     ) -> Result<AssignedTensor<F>, ShapeError> {
-        let exp_chip = ExpChip::<F>::construct(self.numeric_config.clone());
-        let max_chip = MaxChip::<F>::construct(self.numeric_config.clone());
-        let sub_chip = SubChip::<F>::construct(self.numeric_config.clone());
-        let mul_chip = MulChip::<F>::construct(self.numeric_config.clone());
-        let div_chip = DivChip::<F>::construct(self.numeric_config.clone());
-        let acc_chip = AccumulatorChip::<F>::construct(self.numeric_config.clone());
+        let exp = ExpLookUp::<F>::construct(self.numeric_config.clone());
+        let max = MaxLayouter::<F>::construct(self.numeric_config.clone());
+        let sub = SubLayouter::<F>::construct(self.numeric_config.clone());
+        let sub_same = SubSameLayouter::<F>::construct(self.numeric_config.clone());
+        let mul_same = MulSameLayouter::<F>::construct(self.numeric_config.clone());
+        let div_same = DivSameLayouter::<F>::construct(self.numeric_config.clone());
+        let sum = SumLayouter::<F>::construct(self.numeric_config.clone());
 
-        let zero = constants.get(&0).unwrap().clone();
-        let one = constants.get(&1).unwrap().clone();
-        let sf = constants
-            .get(&(self.numeric_config.scale_factor as Int))
-            .unwrap()
-            .clone();
-        let bs = constants
-            .get(&(self.numeric_config.batch_size as Int))
-            .unwrap()
-            .clone();
-
-        let mut f = vec![];
-        for row in input.outer_iter() {
-            let row = row.iter().map(|x| x.as_ref()).collect::<Vec<_>>();
-            let max = match max_chip.compute(
-                layouter.namespace(|| "SoftMaxLoss Max compute"),
-                &vec![row.clone()],
-                &vec![],
-            ) {
-                Ok(output) => output[0].clone(),
-                Err(_) => panic!("SoftMaxLoss max compute failed"),
-            };
-            f.extend(
-                match sub_chip.compute(
-                    layouter.namespace(|| "SoftMaxLoss sub compute"),
-                    &vec![row.clone(), vec![&max; row.len()]],
-                    &vec![zero.as_ref()],
-                ) {
-                    Ok(output) => output,
-                    Err(_) => panic!("SoftMaxLoss sub compute failed"),
-                },
-            )
-        }
-
-        let ef = match exp_chip.compute(
-            layouter.namespace(|| "SoftMaxLoss Exp compute"),
-            &vec![f.iter().collect()],
-            &vec![zero.as_ref(), one.as_ref()],
-        ) {
-            Ok(output) => output,
-            Err(_) => panic!("SoftMaxLoss exp compute failed"),
-        };
-
-        let ef = Array::from_shape_vec(input.shape(), ef)?;
-        let mut dscore = vec![];
-        for row in ef.outer_iter() {
-            let sum = match acc_chip.compute(
-                layouter.namespace(|| "SoftMax Loss Accumulator compute"),
-                &vec![row.iter().collect()],
-                &vec![zero.as_ref()],
-            ) {
-                Ok(output) => output[0].clone(),
-                Err(_) => panic!("SoftMax Loss accumulator compute failed"),
-            };
-            // Multiply by scale factor before division
-            let row = match mul_chip.compute(
-                layouter.namespace(|| "SoftMax Loss Mul compute"),
-                &vec![row.iter().collect(), vec![sf.as_ref(); row.len()]],
-                &vec![zero.as_ref()],
-            ) {
-                Ok(output) => output,
-                Err(_) => panic!("SoftMax Loss mul compute failed"),
-            };
-            dscore.extend(
-                match div_chip.compute(
-                    layouter.namespace(|| "SoftMax Loss Div compute"),
-                    &vec![row.iter().collect(), vec![&sum; row.len()]],
-                    &vec![zero.as_ref(), one.as_ref()],
-                ) {
-                    Ok(output) => output,
-                    Err(_) => panic!("SoftMax Loss div compute failed"),
-                },
-            )
-        }
-        let mut dscore = Array::from_shape_vec(input.shape(), dscore)?;
-
-        let mut dscore_label_view = vec![];
-        for (i, y) in label.iter().enumerate() {
-            y.value()
-                .map(|y| dscore_label_view.push(&dscore[[i, to_primitive::<F>(y) as usize]]));
-        }
-
-        let dscore_sub = match sub_chip.compute(
-            layouter.namespace(|| "SoftMax Loss Sub compute"),
-            &vec![
-                dscore_label_view.clone(),
-                vec![sf.as_ref(); dscore_label_view.len()],
+        let constants = self.get_constants(
+            constants,
+            vec![
+                0,
+                1,
+                2,
+                self.numeric_config.scale_factor as Int,
+                self.numeric_config.batch_size as Int,
             ],
-            &vec![zero.as_ref()],
-        ) {
-            Ok(output) => output,
-            Err(_) => panic!("SoftMax Loss sub compute failed"),
-        };
+        );
+        let sf = constants[3];
+        let bs = constants[4];
 
-        for (i, y) in label.iter().enumerate() {
-            y.value()
-                .map(|y| dscore[[i, to_primitive::<F>(y) as usize]] = dscore_sub[i].clone());
-        }
+        let dscore = layouter
+            .assign_region(
+                || "softmax loss",
+                |mut region| {
+                    let region = &mut region;
+                    let mut row_offset = 0;
 
-        let dscore = match div_chip.compute(
-            layouter.namespace(|| "SoftMax Loss Div compute"),
-            &vec![dscore.iter().collect(), vec![bs.as_ref(); dscore.len()]],
-            &vec![zero.as_ref(), one.as_ref()],
-        ) {
-            Ok(output) => output,
-            Err(_) => panic!("SoftMax Loss div compute failed"),
-        };
+                    let output = input
+                        .outer_iter()
+                        .zip(label.outer_iter())
+                        .map(|(row, y)| {
+                            let row = row.iter().map(|x| x.as_ref()).collect::<Vec<_>>();
+
+                            let max_out = max
+                                .layout(region, row_offset, &vec![row.clone()], &constants)
+                                .unwrap();
+                            row_offset = max_out.1;
+                            let max_out = max_out.0;
+
+                            // f
+                            let sub_out = sub_same
+                                .layout(
+                                    region,
+                                    row_offset,
+                                    &vec![row.clone(), vec![&max_out[0]]],
+                                    &constants,
+                                )
+                                .unwrap();
+                            row_offset = sub_out.1;
+                            let sub_out = sub_out.0;
+
+                            // ef
+                            let exp_out = exp
+                                .layout(
+                                    region,
+                                    row_offset,
+                                    &vec![sub_out.iter().collect()],
+                                    &constants,
+                                )
+                                .unwrap();
+                            row_offset = exp_out.1;
+                            let exp_out = exp_out.0;
+
+                            // efs
+                            let sum_out = sum
+                                .layout(
+                                    region,
+                                    row_offset,
+                                    &vec![exp_out.iter().collect()],
+                                    &constants,
+                                )
+                                .unwrap();
+                            row_offset = sum_out.1;
+                            let sum_out = sum_out.0;
+
+                            // ef/efs
+                            let mul_same_out = mul_same
+                                .layout(
+                                    region,
+                                    row_offset,
+                                    &vec![exp_out.iter().collect(), vec![sf]],
+                                    &constants,
+                                )
+                                .unwrap();
+                            row_offset = mul_same_out.1;
+                            let mul_same_out = mul_same_out.0;
+                            let dscore = div_same
+                                .layout(
+                                    region,
+                                    row_offset,
+                                    &vec![mul_same_out.iter().collect(), vec![&sum_out[0]]],
+                                    &constants,
+                                )
+                                .unwrap();
+                            row_offset = dscore.1;
+                            let dscore = dscore.0;
+
+                            let subs = mul_same
+                                .layout(
+                                    region,
+                                    row_offset,
+                                    &vec![y.iter().map(|x| x.as_ref()).collect(), vec![sf]],
+                                    &constants,
+                                )
+                                .unwrap();
+                            row_offset = subs.1;
+                            let subs = subs.0;
+
+                            let dscore = sub
+                                .layout(
+                                    region,
+                                    row_offset,
+                                    &vec![dscore.iter().collect(), subs.iter().collect()],
+                                    &constants,
+                                )
+                                .unwrap();
+                            row_offset = dscore.1;
+
+                            dscore.0
+                        })
+                        .flatten()
+                        .collect::<Vec<_>>();
+
+                    let output = div_same
+                        .layout(
+                            region,
+                            row_offset,
+                            &vec![output.iter().collect(), vec![bs]],
+                            &constants,
+                        )
+                        .unwrap();
+                    let output = output.0;
+
+                    Ok(output)
+                },
+            )
+            .unwrap();
 
         Ok(Array::from_shape_vec(
             input.shape(),
@@ -210,13 +233,13 @@ impl<F: PrimeField> Loss<F> for SoftMaxLossChip<F> {
 impl<F: PrimeField> NumericConsumer for SoftMaxLossChip<F> {
     fn used_numerics(&self) -> Vec<NumericType> {
         vec![
-            NumericType::RowLookUp,
             NumericType::Exp,
             NumericType::Max,
             NumericType::Sub,
-            NumericType::Mul,
-            NumericType::Div,
-            NumericType::Accumulator,
+            NumericType::SubSame,
+            NumericType::DivSame,
+            NumericType::MulSame,
+            NumericType::Sum,
         ]
     }
 }

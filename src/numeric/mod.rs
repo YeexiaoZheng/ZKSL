@@ -1,175 +1,234 @@
 // numeric mods
-pub mod accumulator;
 pub mod add;
+pub mod add_same;
 pub mod div;
-pub mod dot;
+pub mod div_same;
+pub mod div_sf;
+pub mod dot_vec;
 pub mod max;
 pub mod mul;
+pub mod mul_same;
+pub mod square;
 pub mod sub;
+pub mod sub_same;
+pub mod sum;
+pub mod update;
 
 // nonlinear mods by lookup tables
-pub mod lookups;
 pub mod nonlinear;
 
 // numeric types and traits are defined here
-use std::{
-    collections::{BTreeSet, HashMap},
-    sync::Arc,
-};
-
+use crate::utils::math::Int;
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, Region},
+    circuit::{AssignedCell, Region, Value},
     halo2curves::group::ff::PrimeField,
     plonk::{Advice, Column, Error, Fixed, Selector, TableColumn},
 };
-
-use crate::utils::math::Int;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
 pub enum NumericType {
-    RowLookUp,
-    FieldLookUp,
+    NaturalLookUp, // !IMPORTANT: dont change this position of enum
+
+    Add,
+    AddSame,
+    Sub,
+    SubSame,
+    Mul,
+    MulSame,
+    Div,
+    DivSame,
+    Square,
+    Sum,
+
+    DivSF,
+
+    DotVec,
 
     Max,
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Dot,
-    Accumulator,
+
     Relu,
     Exp,
     Ln,
-}
+    Gather,
 
-#[derive(Clone, Debug, Default)]
-pub struct _NumericConfig {
-    pub used_numerics: Arc<BTreeSet<NumericType>>,
-    pub columns: Vec<Column<Advice>>,
-    pub fixed_columns: Vec<Column<Fixed>>,
-    pub selectors: HashMap<NumericType, Vec<Selector>>,
-    pub tables: HashMap<NumericType, Vec<TableColumn>>,
-    pub maps: HashMap<NumericType, Vec<HashMap<Int, Int>>>,
-    pub scale_factor: u64,
-    pub shift_min_val: i64, // MUST be divisible by 2 * scale_factor
-    pub num_rows: usize,
-    pub num_cols: usize,
-    pub k: usize,
-    pub eta: f64,
-    pub div_outp_min_val: i64,
-    pub use_selectors: bool,
-    pub num_bits_per_elem: i64,
+    Update,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct NumericConfig {
-    pub used_numerics: Arc<BTreeSet<NumericType>>,
+    pub used_numerics: BTreeSet<NumericType>,
 
-    // circuit params
-    pub k: usize,
+    /// circuit params
+    pub k: u32,
     pub scale_factor: u64,
     pub num_rows: usize,
     pub num_cols: usize,
     pub max_val: Int,
     pub min_val: Int,
 
-    // columns
+    /// assignment columns
+    pub assigned: Vec<Column<Advice>>,
+    pub assigned_num_cols: usize,
+
+    /// witness columns
     pub columns: Vec<Column<Advice>>,
     pub constants: Vec<Column<Fixed>>,
 
-    // lookup tables
-    pub tables: HashMap<NumericType, Vec<TableColumn>>,
-    pub maps: HashMap<NumericType, Vec<HashMap<Int, Int>>>,
+    /// lookup tables
+    pub tables: BTreeMap<NumericType, Vec<TableColumn>>, // { type: [input, output] }
+    pub maps: BTreeMap<NumericType, BTreeMap<Int, Int>>,
+    /// gather lookup advice columns
+    pub gather_lookup: Vec<Column<Advice>>,
+    pub gather_selector: Option<Selector>,
 
-    // selectors
+    /// selectors
     pub use_selectors: bool,
-    pub selectors: HashMap<NumericType, Vec<Selector>>,
+    pub selectors: BTreeMap<NumericType, Selector>,
 
-    // commitment
+    /// random vector size
+    pub random_size: usize,
+
+    /// commitment
     pub commitment: bool,
 
-    // learning params
+    /// TODO: feature params(need to be deleted)
+    pub feature_num: Int,
+
+    /// learning params
     pub batch_size: usize,
-    pub learning_rate: Int,
+    pub reciprocal_learning_rate: Int,
 }
 
-pub trait Numeric<F: PrimeField> {
-    fn name(&self) -> String;
-
-    fn num_cols_per_op(&self) -> usize;
-
-    fn num_input_cols_per_row(&self) -> usize;
-
-    fn num_output_cols_per_row(&self) -> usize {
-        1
+pub trait NumericLayout<F: PrimeField> {
+    /// Constant value of zero.
+    const ZERO: F = F::ZERO;
+    /// Constant value of one.
+    const ONE: F = F::ONE;
+    /// Constant value from a integer.
+    fn const_from(val: Int) -> F {
+        F::from(val as u64)
     }
 
-    // Before use this function, the inputs should be divided into rows, each row is considered as a region.
-    // This function will be overridden by the specific numeric operation.
-    fn compute_row(
+    /// Name of the numeric layouter.
+    fn name(&self) -> String;
+
+    /// Number of rows per unit.
+    fn num_rows_per_unit(&self) -> usize;
+
+    /// Number of columns for input per row used.
+    fn num_cols_per_row(&self) -> usize;
+
+    /// Number of unit used.
+    fn used_units(&self, len: usize) -> usize {
+        (len + self.num_cols_per_row() - 1) / self.num_cols_per_row()
+    }
+
+    /// Before use this function, the inputs should be divided into units.
+    /// Operation layer can use it directly to layout the units for better assign performance.
+    /// This function will be overridden by the specific numeric operation.
+    fn layout_unit(
+        &self,
+        region: &mut Region<F>,
+        row_offset: usize,
+        copy_advice: bool,
+        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
+        constants: &Vec<&AssignedCell<F, F>>,
+    ) -> Result<Vec<AssignedCell<F, F>>, Error>;
+
+    /// Layout numerics in default way.
+    /// Need to return row_offset.
+    fn layout(
         &self,
         region: &mut Region<F>,
         row_offset: usize,
         inputs: &Vec<Vec<&AssignedCell<F, F>>>,
         constants: &Vec<&AssignedCell<F, F>>,
-    ) -> Result<Vec<AssignedCell<F, F>>, Error>;
-
-    // This function is required to ensure that the inputs are of the correct length.
-    // The inputs are assumed to be divided into integer rows, with each row having the correct number of columns.
-    // The compute_row used in this function is expected to return a single output.
-    fn compute_rows(
-        &self,
-        mut layouter: impl Layouter<F>,
-        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
-        constants: &Vec<&AssignedCell<F, F>>,
-    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
-        // Check that the inputs are of the correct length.
-        let cols_per_row = self.num_input_cols_per_row();
-        for inp in inputs.iter() {
-            assert_eq!(inp.len() % cols_per_row, 0);
-        }
-
-        // Process the inputs row by row.
-        Ok(layouter.assign_region(
-            || format!("numeric {} aligned rows", self.name()),
-            |mut region| {
-                let mut outputs = vec![];
-                for i in 0..inputs[0].len() / cols_per_row {
-                    let row_inputs = inputs
-                        .iter()
-                        .map(|x| x[i * cols_per_row..(i + 1) * cols_per_row].to_vec())
-                        .collect::<Vec<_>>();
-                    let row_outputs =
-                        match self.compute_row(&mut region, i, &row_inputs, &constants) {
-                            Ok(res) => res,
-                            Err(e) => {
-                                panic!("Error in {} numeric compute_row: {:?}", self.name(), e)
-                            }
-                        };
-                    // Check that the outputs' len is correct.
-                    assert_eq!(row_outputs.len(), self.num_output_cols_per_row());
-                    outputs.extend(row_outputs);
-                }
-                Ok(outputs)
-            },
-        )?)
-    }
-
-    // Computation for the numeric operation.
-    fn compute(
-        &self,
-        mut layouter: impl Layouter<F>,
-        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
-        constants: &Vec<&AssignedCell<F, F>>,
-    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
-        if inputs[0].len() % self.num_input_cols_per_row() != 0 {
-            panic!("Input columns in {} chip are not aligned, please override the forward function to handle this case.", self.name());
-        }
-        self.compute_rows(
-            layouter.namespace(|| format!("{} forward", self.name())),
+    ) -> Result<(Vec<AssignedCell<F, F>>, usize), Error> {
+        self.layout_customise(
+            region,
+            row_offset,
+            self.num_rows_per_unit(),
+            true,
             inputs,
             constants,
         )
+    }
+
+    /// Layout numerics in default way.
+    /// Need to return row_offset.
+    fn layout_customise(
+        &self,
+        region: &mut Region<F>,
+        row_offset: usize,
+        rows_per_unit: usize,
+        copy_advice: bool,
+        inputs: &Vec<Vec<&AssignedCell<F, F>>>,
+        constants: &Vec<&AssignedCell<F, F>>,
+    ) -> Result<(Vec<AssignedCell<F, F>>, usize), Error>;
+
+    /// Assign a row in the region by use correct size of cells.
+    fn assign_row(
+        &self,
+        region: &mut Region<F>,
+        columns: &Vec<Column<Advice>>,
+        copy_advice: bool,
+        row_offset: usize,
+        cells: &Vec<&AssignedCell<F, F>>,
+        pad: Option<F>,
+    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
+        let mut cells = cells.iter().map(|cell| (*cell).clone()).collect::<Vec<_>>();
+
+        if copy_advice {
+            cells = cells
+                .iter()
+                .enumerate()
+                .map(|(idx, cell)| {
+                    cell.copy_advice(|| "", region, columns[idx], row_offset)
+                        .unwrap()
+                })
+                .collect::<Vec<_>>();
+        }
+
+        match pad {
+            Some(pad) => {
+                if cells.len() < self.num_cols_per_row() {
+                    let pads = self.pad_row(
+                        region,
+                        columns,
+                        row_offset,
+                        cells.len(),
+                        self.num_cols_per_row(),
+                        pad,
+                    )?;
+                    cells.extend(pads.into_iter());
+                }
+            }
+            None => {
+                assert_eq!(cells.len(), self.num_cols_per_row());
+            }
+        }
+
+        Ok(cells)
+    }
+
+    /// Pad a row by assign a constant value of "pad" to the cells.
+    fn pad_row(
+        &self,
+        region: &mut Region<F>,
+        columns: &Vec<Column<Advice>>,
+        row_offset: usize,
+        start: usize,
+        end: usize,
+        pad: F,
+    ) -> Result<Vec<AssignedCell<F, F>>, Error> {
+        Ok((start..end)
+            .map(|idx| {
+                region
+                    .assign_advice(|| "", columns[idx], row_offset, || Value::known(pad))
+                    .unwrap()
+            })
+            .collect())
     }
 }
 

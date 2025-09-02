@@ -1,7 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use halo2_proofs::{dev::MockProver, halo2curves::bn256::Fr};
     use ndarray::Array;
 
@@ -28,7 +26,7 @@ mod tests {
 
         // Set numeric config
         configure_static(NumericConfig {
-            used_numerics: Arc::new(circuit.clone().used_numerics.clone()),
+            used_numerics: circuit.clone().used_numerics.clone(),
             ..numeric_config
         });
 
@@ -47,7 +45,11 @@ mod tests {
 
         // Verify the circuit
         let public = gradient.iter().map(|x| to_field(*x)).collect::<Vec<_>>();
-        let prover = MockProver::run(numeric_config.k as u32, &circuit, vec![public]).unwrap();
+        let prover =
+            MockProver::run(numeric_config.k as u32, &circuit, vec![public.clone()]).unwrap();
         assert_eq!(prover.verify(), Ok(()));
+
+        // Create proof
+        // let mut prover =
     }
 }

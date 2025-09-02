@@ -1,4 +1,4 @@
-pub type Int = i128;
+pub type Int = i64;
 pub type Float = f64;
 
 pub fn exp(x: Int, sf: u64) -> Int {
@@ -11,6 +11,10 @@ pub fn ln(x: Int, sf: u64) -> Int {
     let x = x as f64 / sf as f64;
     let ln = x.ln() * sf as f64;
     ln as Int
+}
+
+pub fn fdiv(x: Int, y: Int) -> Int {
+    (x as f64 / y as f64).floor() as Int
 }
 
 pub fn sqrt(x: Int) -> Int {

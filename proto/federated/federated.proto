@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package federated;
+
+service FederatedService {
+  rpc SendData (DataRequest) returns (ProofResponse);
+  rpc SendProof (ProofRequest) returns (DataResponse);
+}
+
+message DataRequest {
+  bytes data = 1;
+}
+
+message ProofResponse {
+  bytes proofs = 1;
+}
+
+message ProofRequest {
+  bytes proofs = 1;
+}
+
+message DataResponse {
+  bytes data = 1;
+}
