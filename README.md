@@ -6,6 +6,8 @@
 - [ ] Sha256 hash function
 - [ ] Lassio for Plonk -->
 
+Repository of [ZKSL: Verifiable and Efficient Split Federated Learning via Asynchronous Zero-Knowledge Proofs](https://www.ndss-symposium.org/ndss-paper/zksl-verifiable-and-efficient-split-federated-learning-via-asynchronous-zero-knowledge-proofs/) NDSS 2026
+
 ## Overview
 
 ZKSL (Zero-Knowledge Split Learning) is a project aimed at leveraging zero-knowledge proofs to verify the integrity and correctness of the split learning process in machine learning. With the increasing prevalence of on-device machine learning and collaborative model training between edge devices and servers, there is a growing need for methods that can both enhance privacy and ensure the validity of the training process. ZKSL addresses these needs by providing a zero-knowledge proof-based solution to validate the entire machine learning process.
